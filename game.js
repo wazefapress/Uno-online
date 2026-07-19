@@ -1,7 +1,6 @@
 
 // ⚠️ ملاحظة هامة: بعد رفع السيرفر على Render، استبدل هذا الرابط برابط Render الخاص بك
 const socket = io("https://uno-online-zbb7.onrender.com");
-
 let currentRoomCode = null;
 
 function createRoom() { socket.emit('createRoom'); }
@@ -16,35 +15,8 @@ socket.on('roomCreated', (roomCode) => {
     currentRoomCode = roomCode;
     document.getElementById('status-msg').style.color = "#2ecc71";
     document.getElementById('status-msg').innerText = `شارك هذا الكود مع صديقك: ${roomCode}`;
-    // وضع الكود في العنصر المخصص ليتمكن الزر من قراءته
-    document.getElementById("room-code-display").innerText = roomId;
-    
-    // إظهار اللوبي (lobby) إذا كان مخفياً
-    document.getElementById("lobby").style.display = "block";
 });
-function copyCode() {
-    // جلب النص من المكان الذي نعرض فيه الكود
-    const codeText = document.getElementById("room-code-display").innerText;
-    
-    // استخدام API الخاص بنسخ النصوص
-    navigator.clipboard.writeText(codeText).then(() => {
-        // تغيير نص الزر مؤقتاً لتأكيد النسخ
-        const btn = document.getElementById("copy-btn");
-        const originalText = btn.innerText;
-        
-        btn.innerText = "تم النسخ!";
-        btn.style.backgroundColor = "#4CAF50"; // لون أخضر عند النجاح
-        
-        // إعادة الزر لحالته الأصلية بعد ثانيتين
-        setTimeout(() => {
-            btn.innerText = originalText;
-            btn.style.backgroundColor = ""; // العودة للون الأصلي
-        }, 2000);
-    }).catch(err => {
-        console.error("فشل النسخ: ", err);
-        alert("حدث خطأ أثناء النسخ");
-    });
-}
+
 socket.on('roomJoined', (roomCode) => {
     currentRoomCode = roomCode;
     document.getElementById('status-msg').style.color = "#3498db";
@@ -53,7 +25,6 @@ socket.on('roomJoined', (roomCode) => {
 
 socket.on('startGame', (data) => {
     document.getElementById('start-screen').classList.remove('active');
-
 });
 
 socket.on('errorMsg', (msg) => {
@@ -144,16 +115,3 @@ function playCard(index) {
 function drawCard() {
     socket.emit('drawCard', currentRoomCode);
 }
-document.getElementById('share-btn').addEventListener('click', () => {
-    if (navigator.share) {
-        navigator.share({
-            title: 'لعبة UNO',
-            text: 'انضم إليّ في تحدي UNO!',
-            url: window.location.href // هذا الرابط هو رابط GitHub Pages الخاص بك
-        }).catch(console.error);
-    } else {
-        // بديل: نسخ الرابط للحافظة إذا لم يدعم المتصفح المشاركة المباشرة
-        navigator.clipboard.writeText(window.location.href);
-        alert('تم نسخ رابط اللعبة للحافظة!');
-    }
-});
