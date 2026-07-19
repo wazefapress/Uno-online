@@ -2,80 +2,44 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>لعبة UNO أونلاين</title>
-    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <style>
-        /* التنسيقات الأصلية للعبة */
-        body { background: #0f172a; color: white; font-family: 'Cairo', sans-serif; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
-        .overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; }
-        .btn { padding: 12px 30px; background: #2ec4b6; border: none; border-radius: 50px; color: white; cursor: pointer; font-weight: 800; margin: 10px; }
-        #chat-container { position: fixed; bottom: 20px; right: 20px; width: 300px; background: #1e293b; border-radius: 15px; display: none; flex-direction: column; z-index: 100; }
-        #chat-messages { height: 200px; overflow-y: auto; padding: 10px; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UNO Online 🌐</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- استدعاء مكتبة Socket.io للعميل -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 </head>
 <body>
 
     <!-- شاشة البداية -->
-    <div id="start-screen" class="overlay">
-        <h1>لعبة UNO أونلاين</h1>
-        <input type="text" id="player-name" placeholder="أدخل اسمك هنا..." style="padding:10px; border-radius:8px; border:none; margin-bottom:10px;">
-        <button class="btn" onclick="createRoom()">إنشاء غرفة جديدة 🏠</button>
-        <input type="text" id="room-code-input" placeholder="كود الغرفة" style="padding:10px; border-radius:8px; border:none;">
-        <button class="btn" onclick="joinRoom()" style="background:#0072ff;">انضمام للغرفة 🤝</button>
-    </div>
-
-    <!-- صندوق الدردشة -->
-    <div id="chat-container">
-        <div style="padding:10px; background:#2ec4b6; border-radius:15px 15px 0 0;">
-            كود الغرفة: <span id="room-id-display">لا يوجد</span>
-        </div>
-        <div id="chat-messages"></div>
-        <div style="display:flex;">
-            <input type="text" id="chat-input" style="flex-grow:1; padding:10px;" placeholder="رسالة...">
-            <button onclick="sendChatMessage()">إرسال</button>
+    <div id="start-screen" class="modal active">
+        <div class="modal-content">
+            <h1>UNO (أونلاين) 🌐</h1>
+            <button onclick="createRoom()" class="btn">إنشاء غرفة جديدة</button>
+            <hr style="margin: 20px 0; border-color: #ccc;">
+            <div>
+                <input type="text" id="room-code-input" placeholder="أدخل كود الغرفة">
+                <button onclick="joinRoom()" class="btn-small join-btn">انضمام</button>
+            </div>
+            <p id="status-msg"></p>
         </div>
     </div>
 
-    <script>
-        const socket = io('https://uno-online-1.onrender.com'); //
-        let myRoomCode = '';
+    <!-- شاشة انتهاء اللعبة -->
+    <div id="game-over-screen" class="modal">
+        <div class="modal-content">
+            <h1 id="game-over-title">🏆 انتهت اللعبة!</h1>
+            <p id="game-over-msg"></p>
+            <button onclick="resetToHome()" class="btn">العودة للقائمة الرئيسية</button>
+        </div>
+    </div>
 
-        function createRoom() {
-            const name = document.getElementById('player-name').value;
-            if (!name) return alert("أدخل الاسم");
-            socket.emit('createRoom', name); //
-        }
+    <!-- ساحة اللعب -->
+    <div id="game-board">
+        <div id="opponent-area" class="player-area"></div>
+        <div id="center-area" class="center-pile"></div>
+        <div id="my-area" class="player-area"></div>
+    </div>
 
-        socket.on('roomCreated', (code) => {
-            myRoomCode = code;
-            document.getElementById('room-id-display').innerText = code;
-            document.getElementById('start-screen').style.display = 'none';
-            document.getElementById('chat-container').style.display = 'flex';
-            alert("تم إنشاء الغرفة! الكود: " + code);
-        });
-
-        function joinRoom() {
-            const name = document.getElementById('player-name').value;
-            const code = document.getElementById('room-code-input').value;
-            if (!name || !code) return alert("أدخل الاسم والكود");
-            socket.emit('joinRoom', { roomCode: code, playerName: name }); //
-            myRoomCode = code;
-        }
-
-        socket.on('chatMessage', (data) => {
-            const chatBox = document.getElementById('chat-messages');
-            chatBox.innerHTML += `<div><strong>${data.sender}:</strong> ${data.text}</div>`;
-        });
-
-        function sendChatMessage() {
-            const msg = document.getElementById('chat-input').value;
-            const name = document.getElementById('player-name').value;
-            socket.emit('sendMessage', { roomCode: myRoomCode, message: msg, playerName: name }); //
-            document.getElementById('chat-input').value = '';
-        }
-
-        // عند حدوث خطأ أو اتصال
-        socket.on('errorMsg', (msg) => alert(msg));
-    </script>
+    <script src="game.js"></script>
 </body>
 </html>
