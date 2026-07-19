@@ -1,6 +1,6 @@
 
 // ⚠️ ملاحظة هامة: بعد رفع السيرفر على Render، استبدل هذا الرابط برابط Render الخاص بك
-const socket = io("https://uno-online-zbb7.onrender.com");
+const socket = io("https://uno-online-zbb7.onrender.com/");
 let currentRoomCode = null;
 
 function createRoom() { socket.emit('createRoom'); }
