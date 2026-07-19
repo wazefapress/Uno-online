@@ -100,12 +100,14 @@ input {
 }
 .dimmed { opacity: 0.6; filter: grayscale(50%); cursor: not-allowed; }
 #game-footer {
-    position: absolute;
-    bottom: 20px;
-    width: 100%;
+    position: fixed; /* تثبيت في الشاشة */
+    bottom: 0;       /* الالتصاق بأسفل الشاشة */
+    left: 0;
+    width: 100%;     /* عرض كامل الشاشة */
     text-align: center;
-    color: #fff;
-    font-family: sans-serif;
+    padding: 15px 0;
+    background-color: rgba(255, 255, 255, 0.5); /* شفافية خفيفة لتناسق مع الأزرق */
+    z-index: 1000;   /* لضمان ظهورها فوق أي شيء آخر */
 }
 
 #share-btn {
