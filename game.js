@@ -1,30 +1,78 @@
-
 // ⚠️ ملاحظة هامة: بعد رفع السيرفر على Render، استبدل هذا الرابط برابط Render الخاص بك
 const socket = io("https://uno-online-zbb7.onrender.com");
 let currentRoomCode = null;
 
-function createRoom() { socket.emit('createRoom'); }
-function joinRoom() {
-    const code = document.getElementById('room-code-input').value.toUpperCase();
+// ==========================================
+// 1. معالجة الرابط المباشر عند تحميل الصفحة
+// ==========================================
+window.onload = () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomIdFromUrl = urlParams.get('room');
+    
+    if (roomIdFromUrl) {
+        // إذا كان هناك كود في الرابط، نحاول الانضمام تلقائياً
+        document.getElementById('room-code-input').value = roomIdFromUrl;
+        joinRoom(roomIdFromUrl);
+    }
+};
+
+// ==========================================
+// 2. دوال إنشاء والانضمام للغرف
+// ==========================================
+function createRoom() { 
+    socket.emit('createRoom'); 
+}
+
+function joinRoom(codeFromUrl = null) {
+    // نأخذ الكود من الرابط إذا وجد، أو من الخانة
+    const code = codeFromUrl || document.getElementById('room-code-input').value.toUpperCase();
     if (code) socket.emit('joinRoom', code);
 }
-function resetToHome() { location.reload(); }
 
-// أحداث الاتصال والغرف
+function resetToHome() { 
+    // إزالة كود الغرفة من الرابط عند العودة للرئيسية
+    window.location.href = window.location.pathname; 
+}
+
+// ==========================================
+// 3. أحداث الاتصال والغرف (Socket Events)
+// ==========================================
 socket.on('roomCreated', (roomCode) => {
     currentRoomCode = roomCode;
-    document.getElementById('status-msg').style.color = "#2ecc71";
-    document.getElementById('status-msg').innerText = `شارك هذا الكود مع صديقك: ${roomCode}`;
+    const fullLink = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
+    
+    const statusMsg = document.getElementById('status-msg');
+    statusMsg.style.color = "#2ecc71";
+    
+    // عرض الكود والرابط مع زر النسخ داخل رسالة الحالة
+    statusMsg.innerHTML = `
+        تم إنشاء الغرفة! كود الغرفة: <strong>${roomCode}</strong><br>
+        <div style="margin-top: 10px;">
+            <input type="text" id="link-box" value="${fullLink}" readonly style="width: 80%; padding: 5px; text-align: left;" dir="ltr">
+            <button onclick="copyInviteLink()" style="padding: 6px 10px; background: #3498db; color: white; border: none; cursor: pointer;">نسخ الرابط</button>
+        </div>
+    `;
 });
+
+// دالة لنسخ الرابط من مربع النص أعلاه
+function copyInviteLink() {
+    const copyText = document.getElementById("link-box");
+    copyText.select();
+    document.execCommand("copy");
+    alert("تم نسخ الرابط! أرسله لصديقك الآن.");
+}
 
 socket.on('roomJoined', (roomCode) => {
     currentRoomCode = roomCode;
     document.getElementById('status-msg').style.color = "#3498db";
-    document.getElementById('status-msg').innerText = "ننتظر بدء اللعبة...";
+    document.getElementById('status-msg').innerText = "تم الانضمام للغرفة! ننتظر بدء اللعبة...";
 });
 
 socket.on('startGame', (data) => {
+    // إخفاء شاشة البداية وعرض الطاولة
     document.getElementById('start-screen').classList.remove('active');
+    
+    // ملاحظة: تأكد أن طاولة اللعب ظاهرة عبر الـ CSS الخاص بك بمجرد إزالة الـ active من شاشة البداية
 });
 
 socket.on('errorMsg', (msg) => {
@@ -39,10 +87,12 @@ socket.on('errorMsg', (msg) => {
 
 socket.on('playerLeft', (msg) => {
     alert(msg);
-    location.reload();
+    resetToHome();
 });
 
-// أحداث اللعبة والرندرة
+// ==========================================
+// 4. أحداث اللعبة والرندرة (توزيع الكروت)
+// ==========================================
 socket.on('updateGameState', (state) => {
     renderOpponentHiddenCards(state.opponentCardCount);
     renderCenterCard(state.topCard);
@@ -115,33 +165,24 @@ function playCard(index) {
 function drawCard() {
     socket.emit('drawCard', currentRoomCode);
 }
+
+// ==========================================
+// 5. زر المشاركة العام
+// ==========================================
 document.getElementById('share-btn').addEventListener('click', () => {
+    // تحديد الرابط: إذا كان اللاعب في غرفة يشارك رابط الغرفة، وإلا يشارك رابط الموقع العام
+    const shareUrl = currentRoomCode 
+        ? `${window.location.origin}${window.location.pathname}?room=${currentRoomCode}`
+        : window.location.href;
+
     if (navigator.share) {
         navigator.share({
             title: 'لعبة UNO',
             text: 'انضم إليّ في تحدي UNO!',
-            url: window.location.href // هذا الرابط هو رابط GitHub Pages الخاص بك
+            url: shareUrl
         }).catch(console.error);
     } else {
-        // بديل: نسخ الرابط للحافظة إذا لم يدعم المتصفح المشاركة المباشرة
-        navigator.clipboard.writeText(window.location.href);
+        navigator.clipboard.writeText(shareUrl);
         alert('تم نسخ رابط اللعبة للحافظة!');
     }
-});
-// دالة الانضمام عند الضغط على زر
-function joinGame() {
-    const roomId = document.getElementById('room-input').value; // جلب الكود من الخانة
-    if (roomId) {
-        socket.emit('join-room', roomId);
-    }
-}
-
-// استقبال الرد من السيرفر
-socket.on('join-success', (roomId) => {
-    alert('تم الانضمام للغرفة بنجاح!');
-    // هنا تقوم بإخفاء شاشة البداية وإظهار شاشة اللعبة
-});
-
-socket.on('join-error', (message) => {
-    alert(message); // إظهار رسالة الخطأ
 });
