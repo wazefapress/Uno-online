@@ -107,7 +107,7 @@ input {
     text-align: center;
     padding: 15px 0;
     background-color: rgba(255, 255, 255, 0.5); /* شفافية خفيفة لتناسق مع الأزرق */
-    z-index: 1000;   /* لضمان ظهورها فوق أي شيء آخر */
+    z-index: 100;   /* لضمان ظهورها فوق أي شيء آخر */
 }
 
 #share-btn {
