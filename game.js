@@ -16,8 +16,35 @@ socket.on('roomCreated', (roomCode) => {
     currentRoomCode = roomCode;
     document.getElementById('status-msg').style.color = "#2ecc71";
     document.getElementById('status-msg').innerText = `شارك هذا الكود مع صديقك: ${roomCode}`;
+    // وضع الكود في العنصر المخصص ليتمكن الزر من قراءته
+    document.getElementById("room-code-display").innerText = roomId;
+    
+    // إظهار اللوبي (lobby) إذا كان مخفياً
+    document.getElementById("lobby").style.display = "block";
 });
-
+function copyCode() {
+    // جلب النص من المكان الذي نعرض فيه الكود
+    const codeText = document.getElementById("room-code-display").innerText;
+    
+    // استخدام API الخاص بنسخ النصوص
+    navigator.clipboard.writeText(codeText).then(() => {
+        // تغيير نص الزر مؤقتاً لتأكيد النسخ
+        const btn = document.getElementById("copy-btn");
+        const originalText = btn.innerText;
+        
+        btn.innerText = "تم النسخ!";
+        btn.style.backgroundColor = "#4CAF50"; // لون أخضر عند النجاح
+        
+        // إعادة الزر لحالته الأصلية بعد ثانيتين
+        setTimeout(() => {
+            btn.innerText = originalText;
+            btn.style.backgroundColor = ""; // العودة للون الأصلي
+        }, 2000);
+    }).catch(err => {
+        console.error("فشل النسخ: ", err);
+        alert("حدث خطأ أثناء النسخ");
+    });
+}
 socket.on('roomJoined', (roomCode) => {
     currentRoomCode = roomCode;
     document.getElementById('status-msg').style.color = "#3498db";
@@ -26,6 +53,7 @@ socket.on('roomJoined', (roomCode) => {
 
 socket.on('startGame', (data) => {
     document.getElementById('start-screen').classList.remove('active');
+
 });
 
 socket.on('errorMsg', (msg) => {
