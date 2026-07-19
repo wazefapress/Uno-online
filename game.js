@@ -1,3 +1,31 @@
+window.onload = () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomId = urlParams.get('room');
+
+    if (roomId) {
+        // إذا وجدنا كود في الرابط، نحاول الانضمام للغرفة فوراً
+        console.log("تم اكتشاف غرفة في الرابط:", roomId);
+        socket.emit('join-room', roomId);
+    }
+};
+socket.on('room-created', (roomId) => {
+    const fullLink = `${window.location.origin}${window.location.pathname}?room=${roomId}`;
+    
+    // عرض الرابط للاعب
+    document.getElementById('lobby').innerHTML = `
+        <p>كود الغرفة: <strong>${roomId}</strong></p>
+        <p>أرسل هذا الرابط لصديقك:</p>
+        <input type="text" value="${fullLink}" id="link-box" readonly>
+        <button onclick="copyLink()">نسخ الرابط</button>
+    `;
+});
+
+function copyLink() {
+    const copyText = document.getElementById("link-box");
+    copyText.select();
+    document.execCommand("copy");
+    alert("تم نسخ الرابط!");
+}
 // ⚠️ ملاحظة هامة: بعد رفع السيرفر على Render، استبدل هذا الرابط برابط Render الخاص بك
 const socket = io("https://uno-online-zbb7.onrender.com");
 
