@@ -1,63 +1,170 @@
-٨<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UNO Online 🌐</title>
+    <title>لعبة UNO أونلاين</title>
     <link rel="stylesheet" href="style.css">
-    <!-- استدعاء مكتبة Socket.io للعميل -->
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    
+    <!-- تنسيق أساسي مدمج لضمان عمل الواجهة بشكل صحيح فوراً -->
+    <style>
+        body {
+            background-color: #e0f2fe; /* خلفية باللون الأزرق الفاتح */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        /* شاشات اللعبة التبديلية */
+        .screen {
+            display: none;
+            width: 100%;
+            max-width: 600px;
+            text-align: center;
+            margin-top: 50px;
+            padding: 20px;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        /* حاوية اللعبة الرئيسية للطاولة */
+        #game-container {
+            display: none; /* يتم إظهاره عبر game.js عند بدء اللعبة */
+            width: 100%;
+            max-width: 800px;
+            margin-top: 20px;
+            margin-bottom: 80px; /* مساحة للـ footer */
+            text-align: center;
+        }
+
+        /* تنسيق مناطق الكروت */
+        .hand {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 15px 0;
+            min-height: 120px;
+        }
+
+        .card {
+            width: 70px;
+            height: 110px;
+            border-radius: 8px;
+            border: 2px solid #fff;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: bold;
+            background-color: #fff;
+            cursor: pointer;
+        }
+
+        .card-back {
+            background-color: #e74c3c;
+            color: white;
+            cursor: default;
+        }
+
+        .suit-red { color: #e74c3c; }
+        .suit-black { color: #2c3e50; }
+        .dimmed { opacity: 0.6; cursor: not-allowed; }
+
+        /* الحقوق أسفل الشاشة */
+        #game-footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            padding: 10px 0;
+            background-color: rgba(255, 255, 255, 0.8);
+            border-top: 1px solid #cbd5e1;
+            z-index: 1000;
+        }
+
+        #game-footer p { margin: 5px 0; font-size: 14px; }
+        
+        .btn-main {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        
+        .btn-main:hover { background-color: #2980b9; }
+        
+        input[type="text"] {
+            padding: 10px;
+            font-size: 16px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            text-align: center;
+        }
+    </style>
 </head>
 <body>
 
-    <!-- شاشة البداية -->
-    <div id="start-screen" class="modal active">
-        <div class="modal-content">
-            <h1>UNO (أونلاين) 🌐</h1>
-            <!-- الحقوق في الأسفل خارج الحاوية -->
-    <div id="game-footer">
-        <p>تصميم وتطوير: <a href="https://www.patreon.com/haythamzeidan" target="_blank">هيثم زيدان</a></p>
-        <button id="share-btn">شارك اللعبة</button>
-    </div>
-            <button onclick="createRoom()" class="btn">إنشاء غرفة جديدة</button>
-            <hr style="margin: 20px 0; border-color: #ccc;">
-            <div>
-                <input type="text" id="room-code-input" placeholder="أدخل كود الغرفة">
-                <button onclick="joinRoom()" class="btn-small join-btn">انضمام</button>
-            </div>
-            <p id="status-msg"></p>
-            <div id="lobby">
-    <!-- هنا يظهر الكود -->
-    
-    
-    
-    <!-- هنا يظهر الكود -->
-    
-    
-    <!-- زر النسخ -->
-
-    
+    <!-- 1. شاشة البداية واللوبي -->
+    <div id="start-screen" class="screen active">
+        <h1>مرحباً بك في لعبة UNO</h1>
+        <p>أنشئ غرفة جديدة أو انضم لغرفة صديقك</p>
+        
+        <div style="margin-bottom: 20px;">
+            <button class="btn-main" onclick="createRoom()">إنشاء غرفة جديدة</button>
+        </div>
+        
+        <hr style="border: 0; border-top: 1px solid #cbd5e1; margin: 20px 0;">
+        
+        <div style="margin-bottom: 20px;">
+            <input type="text" id="room-code-input" placeholder="أدخل كود الغرفة">
+            <button class="btn-main" onclick="joinRoom()">انضمام للغرفة</button>
         </div>
 
+        <!-- رسائل الحالة ورابط الدعوة المباشر يظهر هنا -->
+        <div id="status-msg" style="margin-top: 20px; font-weight: bold;"></div>
     </div>
 
-    <!-- شاشة انتهاء اللعبة -->
-    <div id="game-over-screen" class="modal">
-        <div class="modal-content">
-            <h1 id="game-over-title">🏆 انتهت اللعبة!</h1>
-            <p id="game-over-msg"></p>
-            <button onclick="resetToHome()" class="btn">العودة للقائمة الرئيسية</button>
-        </div>
+    <!-- 2. طاولة اللعبة (مخفية افتراضياً وتظهر عند بدء اللعبة) -->
+    <div id="game-container">
+        <!-- منطقة كروت الخصم (في الأعلى) -->
+        <div id="opponent-area"></div>
+
+        <!-- منطقة الورقة المركزية (في المنتصف) -->
+        <div id="center-area" style="margin: 30px 0;"></div>
+
+        <!-- منطقة كروتي أنا وأزرار التحكم (في الأسفل) -->
+        <div id="my-area"></div>
     </div>
 
-    <!-- ساحة اللعب -->
-    <div id="game-board">
-        <div id="opponent-area" class="player-area"></div>
-        <div id="center-area" class="center-pile"></div>
-        <div id="my-area" class="player-area"></div>
+    <!-- 3. شاشة نهاية اللعبة -->
+    <div id="game-over-screen" class="screen">
+        <h1 id="game-over-title">انتهاء اللعبة</h1>
+        <div id="game-over-msg"></div>
+        <button class="btn-main" onclick="resetToHome()" style="margin-top: 20px;">العودة للرئيسية</button>
     </div>
 
+    <!-- 4. الحقوق الموضعية الثابتة في الأسفل -->
+    <footer id="game-footer">
+        <p>تصميم وتطوير: <a href="https://www.patreon.com/haythamzeidan" target="_blank" style="color: #2980b9; text-decoration: none; font-weight: bold;">هيثم زيدان</a></p>
+        <button id="share-btn" style="padding: 5px 15px; background-color: #2ecc71; color: white; border: none; border-radius: 4px; cursor: pointer;">شارك اللعبة 🔗</button>
+    </footer>
+
+    <!-- استدعاء السكربتات: Socket.io أولاً ثم ملف اللعبة الخاص بك -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script src="game.js"></script>
-    
+
 </body>
 </html>
