@@ -115,3 +115,16 @@ function playCard(index) {
 function drawCard() {
     socket.emit('drawCard', currentRoomCode);
 }
+document.getElementById('share-btn').addEventListener('click', () => {
+    if (navigator.share) {
+        navigator.share({
+            title: 'لعبة UNO',
+            text: 'انضم إليّ في تحدي UNO!',
+            url: window.location.href // هذا الرابط هو رابط GitHub Pages الخاص بك
+        }).catch(console.error);
+    } else {
+        // بديل: نسخ الرابط للحافظة إذا لم يدعم المتصفح المشاركة المباشرة
+        navigator.clipboard.writeText(window.location.href);
+        alert('تم نسخ رابط اللعبة للحافظة!');
+    }
+});
