@@ -69,10 +69,27 @@ socket.on('roomJoined', (roomCode) => {
 });
 
 socket.on('startGame', (data) => {
-    // إخفاء شاشة البداية وعرض الطاولة
-    document.getElementById('start-screen').classList.remove('active');
+    console.log(data.message); // طباعة رسالة "اكتمل العدد" في الكونسول للتأكد
+
+    // 1. إخفاء شاشات البداية واللوبي
+    const startScreen = document.getElementById('start-screen');
+    if (startScreen) startScreen.style.display = 'none';
     
-    // ملاحظة: تأكد أن طاولة اللعب ظاهرة عبر الـ CSS الخاص بك بمجرد إزالة الـ active من شاشة البداية
+    const lobby = document.getElementById('lobby');
+    if (lobby) lobby.style.display = 'none';
+
+    // 2. إظهار حاوية اللعبة (الطاولة)
+    const gameContainer = document.getElementById('game-container');
+    if (gameContainer) gameContainer.style.display = 'block'; 
+
+    // (احتياطي) في حال لم تكن تضع مناطق اللعب داخل game-container
+    const oppArea = document.getElementById('opponent-area');
+    const centerArea = document.getElementById('center-area');
+    const myArea = document.getElementById('my-area');
+    
+    if (oppArea) oppArea.style.display = 'block';
+    if (centerArea) centerArea.style.display = 'block';
+    if (myArea) myArea.style.display = 'block';
 });
 
 socket.on('errorMsg', (msg) => {
