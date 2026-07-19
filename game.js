@@ -1,5 +1,5 @@
 // ⚠️ ملاحظة هامة: بعد رفع السيرفر على Render، استبدل هذا الرابط برابط Render الخاص بك
-const socket = io("http://localhost:3000"); 
+const socket = io("https://uno-online-zbb7.onrender.com");
 
 let currentRoomCode = null;
 
