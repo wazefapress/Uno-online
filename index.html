@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UNO Online 🌐</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- استدعاء مكتبة Socket.io للعميل -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+
+    <!-- شاشة البداية -->
+    <div id="start-screen" class="modal active">
+        <div class="modal-content">
+            <h1>UNO (أونلاين) 🌐</h1>
+            <button onclick="createRoom()" class="btn">إنشاء غرفة جديدة</button>
+            <hr style="margin: 20px 0; border-color: #ccc;">
+            <div>
+                <input type="text" id="room-code-input" placeholder="أدخل كود الغرفة">
+                <button onclick="joinRoom()" class="btn-small join-btn">انضمام</button>
+            </div>
+            <p id="status-msg"></p>
+        </div>
+    </div>
+
+    <!-- شاشة انتهاء اللعبة -->
+    <div id="game-over-screen" class="modal">
+        <div class="modal-content">
+            <h1 id="game-over-title">🏆 انتهت اللعبة!</h1>
+            <p id="game-over-msg"></p>
+            <button onclick="resetToHome()" class="btn">العودة للقائمة الرئيسية</button>
+        </div>
+    </div>
+
+    <!-- ساحة اللعب -->
+    <div id="game-board">
+        <div id="opponent-area" class="player-area"></div>
+        <div id="center-area" class="center-pile"></div>
+        <div id="my-area" class="player-area"></div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
