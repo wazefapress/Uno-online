@@ -49,6 +49,18 @@ function sendGameStateToPlayers(roomCode, room) {
 
 io.on('connection', (socket) => {
     console.log('مستخدم متصل:', socket.id);
+    // استقبال الرسائل النصية وتوزيعها داخل الغرفة
+    socket.on('sendChatMessage', (data) => {
+        const { roomCode, message } = data;
+        
+        // التحقق من وجود الغرفة ومن أن الرسالة ليست فارغة
+        if (roomCode && message.trim() !== '') {
+            io.to(roomCode).emit('receiveChatMessage', {
+                senderId: socket.id,
+                message: message.trim()
+            });
+        }
+    });
 
     socket.on('createRoom', () => {
         const roomCode = generateRoomCode();
