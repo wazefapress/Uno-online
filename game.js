@@ -224,21 +224,77 @@ document.getElementById('share-btn').addEventListener('click', () => {
     }
 });
 // دالة إرسال الرسالة إلى السيرفر
-function sendChatMessage() {
-    const inputElement = document.getElementById('chat-input');
-    const messageText = inputElement.value.trim();
-    
-    if (messageText !== '' && currentRoomCode) {
-        // إرسال الحدث للسيرفر مع رمز الغرفة الحالي
-        socket.emit('sendChatMessage', {
-            roomCode: currentRoomCode,
-            message: messageText
-        });
+
         
         // تصفير حقل الإدخال بعد الإرسال
         inputElement.value = '';
     }
 }
+// دالة إرسال الرسالة إلى السيرفر (محدثة مع نظام فحص الأخطاء)
+function sendChatMessage() {
+    const inputElement = document.getElementById('chat-input');
+    if (!inputElement) {
+        console.error("خطأ: حقل الإدخال chat-input غير موجود في الـ HTML!");
+        return;
+    }
+
+    const messageText = inputElement.value.trim();
+    
+    // محاولة التعرف التلقائي على متغير الغرفة في ملفك (سواء كان اسمه currentRoomCode أو roomCode)
+    let activeRoomCode = null;
+    if (typeof currentRoomCode !== 'undefined') activeRoomCode = currentRoomCode;
+    else if (typeof roomCode !== 'undefined') activeRoomCode = roomCode;
+
+    console.log("محاولة إرسال رسالة. كود الغرفة المكتشف:", activeRoomCode);
+
+    if (messageText === '') return; // تجاهل الرسائل الفارغة
+
+    if (!activeRoomCode) {
+        console.error("خطأ: لم يتم العثور على متغير يحمل كود الغرفة! تأكد من اسم المتغير المستخدم عندك في game.js");
+        alert("يجب أن تكون داخل غرفة لإرسال رسائل!");
+        return;
+    }
+
+    // إرسال الحدث للسيرفر
+    socket.emit('sendChatMessage', {
+        roomCode: activeRoomCode,
+        message: messageText
+    });
+    
+    console.log("تمت عملية الـ emit بنجاح للرسالة:", messageText);
+    
+    // تصفير حقل الإدخال
+    inputElement.value = '';
+}
+
+// إتاحة الإرسال بمجرد الضغط على زر Enter
+function handleChatKeyPress(event) {
+    if (event.key === 'Enter') {
+        sendChatMessage();
+    }
+}
+
+// استقبال الرسائل القادمة من السيرفر وعرضها (محدثة)
+socket.on('receiveChatMessage', (data) => {
+    console.log("تم استقبال رسالة من السيرفر بنجاح:", data);
+    
+    const chatMessagesContainer = document.getElementById('chat-messages');
+    if (!chatMessagesContainer) {
+        console.error("خطأ: حاوية الرسائل chat-messages غير موجودة في الـ HTML!");
+        return;
+    }
+    
+    const messageElement = document.createElement('div');
+    const isMyMessage = (data.senderId === socket.id);
+    
+    messageElement.className = `chat-msg ${isMyMessage ? 'msg-me' : 'msg-opponent'}`;
+    messageElement.textContent = (isMyMessage ? 'أنت: ' : 'الخصم: ') + data.message;
+    
+    chatMessagesContainer.appendChild(messageElement);
+    
+    // تمرير تلقائي لأسفل الصندوق
+    chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
+});
 
 // إتاحة الإرسال بمجرد الضغط على زر Enter في لوحة المفاتيح
 function handleChatKeyPress(event) {
