@@ -97,3 +97,21 @@ input {
     cursor: default;
 }
 .dimmed { opacity: 0.6; filter: grayscale(50%); cursor: not-allowed; }
+#game-footer {
+    position: absolute;
+    bottom: 20px;
+    width: 100%;
+    text-align: center;
+    color: #fff;
+    font-family: sans-serif;
+}
+
+#share-btn {
+    margin-top: 10px;
+    padding: 8px 16px;
+    background-color: #ffcc00;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    }
