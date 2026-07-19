@@ -128,3 +128,20 @@ document.getElementById('share-btn').addEventListener('click', () => {
         alert('تم نسخ رابط اللعبة للحافظة!');
     }
 });
+// دالة الانضمام عند الضغط على زر
+function joinGame() {
+    const roomId = document.getElementById('room-input').value; // جلب الكود من الخانة
+    if (roomId) {
+        socket.emit('join-room', roomId);
+    }
+}
+
+// استقبال الرد من السيرفر
+socket.on('join-success', (roomId) => {
+    alert('تم الانضمام للغرفة بنجاح!');
+    // هنا تقوم بإخفاء شاشة البداية وإظهار شاشة اللعبة
+});
+
+socket.on('join-error', (message) => {
+    alert(message); // إظهار رسالة الخطأ
+});
