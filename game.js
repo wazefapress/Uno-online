@@ -53,7 +53,27 @@ socket.on('roomCreated', (roomCode) => {
         </div>
     `;
 });
-
+// استقبال الرسائل القادمة من السيرفر وعرضها
+socket.on('receiveChatMessage', (data) => {
+    const chatMessagesContainer = document.getElementById('chat-messages');
+    
+    // إنشاء عنصر الفقاعة الجديد
+    const messageElement = document.createElement('div');
+    
+    // التحقق هل الرسالة تخصني أم تخص اللاعب الآخر
+    const isMyMessage = (data.senderId === socket.id);
+    
+    messageElement.className = `chat-msg ${isMyMessage ? 'msg-me' : 'msg-opponent'}`;
+    
+    // تأمين النص لتجنب ثغرات XSS باستخدام textContent
+    messageElement.textContent = (isMyMessage ? 'أنت: ' : 'الخصم: ') + data.message;
+    
+    // إضافة الرسالة إلى الحاوية
+    chatMessagesContainer.appendChild(messageElement);
+    
+    // التمرير التلقائي لأسفل الصندوق لمشاهدة الرسائل الجديدة فوراً
+    chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
+});
 // دالة لنسخ الرابط من مربع النص أعلاه
 function copyInviteLink() {
     const copyText = document.getElementById("link-box");
@@ -203,3 +223,26 @@ document.getElementById('share-btn').addEventListener('click', () => {
         alert('تم نسخ رابط اللعبة للحافظة!');
     }
 });
+// دالة إرسال الرسالة إلى السيرفر
+function sendChatMessage() {
+    const inputElement = document.getElementById('chat-input');
+    const messageText = inputElement.value.trim();
+    
+    if (messageText !== '' && currentRoomCode) {
+        // إرسال الحدث للسيرفر مع رمز الغرفة الحالي
+        socket.emit('sendChatMessage', {
+            roomCode: currentRoomCode,
+            message: messageText
+        });
+        
+        // تصفير حقل الإدخال بعد الإرسال
+        inputElement.value = '';
+    }
+}
+
+// إتاحة الإرسال بمجرد الضغط على زر Enter في لوحة المفاتيح
+function handleChatKeyPress(event) {
+    if (event.key === 'Enter') {
+        sendChatMessage();
+    }
+}
