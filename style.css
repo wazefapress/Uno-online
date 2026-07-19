@@ -1,10 +1,12 @@
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #add8e6;
-    color: white;
+    background-color: #add8e6; /* هذا هو كود اللون الأزرق الفاتح (LightBlue) */
     margin: 0;
-    padding: 20px;
-    text-align: center;
+    padding: 0;
+    /* تأكد من إضافة هذه السطور لضمان تغطية كامل الشاشة */
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .modal {
