@@ -1,5 +1,7 @@
 لعبة UNO Online 
-Render.com for game server and GitHub for Hosting 
+Render.com ,GitHub, cloudflare 
+Backend &  Frontend Hosting 
+
 
 https://uno-online.haythamzeidan.workers.dev/
 
