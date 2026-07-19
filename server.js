@@ -49,6 +49,32 @@ function sendGameStateToPlayers(roomCode, room) {
 
 io.on('connection', (socket) => {
     console.log('مستخدم متصل:', socket.id);
+    // حدث طلب إعادة اللعب مع نفس اللاعبين
+    socket.on('requestRematch', (roomCode) => {
+        const room = rooms[roomCode];
+        if (!room) return socket.emit('errorMsg', 'الغرفة لم تعد موجودة!');
+        
+        if (!room.rematchRequests) room.rematchRequests = [];
+        
+        // إضافة معرف اللاعب الحالي لمصفوفة الطلبات إذا لم يكن موجوداً
+        if (!room.rematchRequests.includes(socket.id)) {
+            room.rematchRequests.push(socket.id);
+        }
+        
+        // إشعار اللاعب الآخر برغبة خصمه في إعادة اللعب
+        socket.to(roomCode).emit('opponentWantsRematch');
+        
+        // إذا وافق اللاعبان معاً، تبدأ الجولة الجديدة فوراً
+        if (room.rematchRequests.length === 2) {
+            room.rematchRequests = [];
+            // إعادة تهيئة الكروت وتوزيعها
+            room.gameState = initGame(room.players[0], room.players[1]);
+            
+            // إرسال أمر بدء اللعبة وتحديث الأوراق للجميع
+            io.to(roomCode).emit('startGame', { message: 'بدأت جولة جديدة! بالتوفيق.' });
+            sendGameStateToPlayers(roomCode, room);
+        }
+    });
 
     socket.on('createRoom', () => {
         const roomCode = generateRoomCode();
@@ -99,10 +125,13 @@ io.on('connection', (socket) => {
         state.discardPile.unshift(cardToPlay);
 
         if (playerHand.length === 0) {
-            io.to(data.roomCode).emit('gameOver', { winnerId: playerId, reason: 'normal' });
-            delete rooms[data.roomCode];
-            return;
-        }
+    io.to(data.roomCode).emit('gameOver', { winnerId: playerId, reason: 'normal' });
+    
+    // التعديل هنا: لا تحذف الغرفة، بل صفر حالة اللعبة وجهز مصفوفة طلب الإعادة
+    room.gameState = null; 
+    room.rematchRequests = []; 
+    return;
+}
 
         state.turnIndex = 1 - state.turnIndex;
         sendGameStateToPlayers(data.roomCode, room);
