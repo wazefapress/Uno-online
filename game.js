@@ -246,3 +246,19 @@ function handleChatKeyPress(event) {
         sendChatMessage();
     }
 }
+
+// دالة تصغير وتكبير صندوق المحادثة
+function toggleChat() {
+    const chatContainer = document.getElementById('chat-container');
+    const toggleIcon = document.getElementById('chat-toggle-icon');
+    
+    // تبديل كلاس CSS الخاص بالتصغير
+    chatContainer.classList.toggle('minimized');
+    
+    // تغيير الأيقونة بناءً على حالة الصندوق لإرشاد اللاعب
+    if (chatContainer.classList.contains('minimized')) {
+        toggleIcon.textContent = '▲'; // سهم للأعلى يعني (اضغط للتكبير)
+    } else {
+        toggleIcon.textContent = '−'; // علامة ناقص تعني (اضغط للتصغير)
+    }
+}
