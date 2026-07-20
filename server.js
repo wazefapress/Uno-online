@@ -118,24 +118,22 @@ io.on('connection', (socket) => {
             gameState: null, 
             isAi: true 
         };
-        // 1. إدخال اللاعب فعلياً في قناة الاتصال (Room) الخاصة بـ Socket.io
-    socket.join(roomCode);
-
-    // 2. النقطة الأهم: إرسال الرد للمتصفح ليبدأ اللعبة ويغير الشاشة!
-    // (تأكد من أن اسم الحدث هنا يطابق ما برمجته في الواجهة)
-    socket.emit('gameStarted', roomCode); 
-    
-    // ملاحظة: لا تنسَ إغلاق القوسين في النهاية
-});
+        
+        // 1. إدخال اللاعب فعلياً في قناة الاتصال (Room)
         socket.join(roomCode);
+
+        // 2. إرسال رد للمتصفح لإخفاء شاشة البداية
+        socket.emit('gameStarted', roomCode); 
+        
+        // 3. إرسال أحداث الانضمام وبدء اللعبة
         socket.emit('roomCreated', roomCode);
         socket.emit('roomJoined', roomCode);
         
-        // بدء اللعبة فوراً للـ AI دون انتظار لاعب آخر
+        // 4. بدء اللعبة وتوزيع الأوراق فوراً
         io.to(socket.id).emit('startGame', { message: 'بدأت اللعبة ضد الكمبيوتر 🤖!' });
         rooms[roomCode].gameState = initGame(socket.id, 'AI_BOT');
         sendGameStateToPlayers(roomCode, rooms[roomCode]);
-    });
+    }); // تم إصلاح مكان الإغلاق هنا ليكون شاملاً لكل العمليات!
 
     socket.on('joinRoom', (roomCode) => {
         const room = rooms[roomCode];
