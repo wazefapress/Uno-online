@@ -6,7 +6,7 @@ const io = require('socket.io')(http, {
 });
 
 const rooms = {};
-const disconnectTimeouts = {}; // لتخزين المؤقتات عند الانقطاع وإعطاء مهلة للعودة
+const disconnectTimeouts = {};
 
 function generateRoomCode() {
     return Math.random().toString(36).substring(2, 7).toUpperCase();
@@ -20,9 +20,10 @@ function generateDeck() {
     return deck.sort(() => Math.random() - 0.5);
 }
 
-// توزيع 7 أوراق لكل لاعب
 function initGame(player1, player2) {
     const deck = generateDeck();
+    
+    // سحب 7 أوراق لكل لاعب باستخدام حلقة تكرار بدلاً من السحب اليدوي
     const player1Hand = [];
     const player2Hand = [];
     
@@ -33,7 +34,7 @@ function initGame(player1, player2) {
 
     return {
         deck: deck,
-        discardPile: [deck.pop()],
+        discardPile: [deck.pop()], // سحب أول ورقة لتكون على الطاولة
         hands: {
             [player1]: player1Hand,
             [player2]: player2Hand
@@ -46,6 +47,7 @@ function initGame(player1, player2) {
 function sendGameStateToPlayers(roomCode, room) {
     const state = room.gameState;
     room.players.forEach((playerId, index) => {
+        // إذا كان المعرف هو البوت، لا نرسل له عبر السوكيت
         if (playerId === 'AI_BOT') return;
 
         const opponentId = room.players[1 - index];
@@ -59,30 +61,38 @@ function sendGameStateToPlayers(roomCode, room) {
     });
 }
 
-// دالة إدارة حركة الذكاء الاصطناعي
+// 🤖 دالة إدارة حركة الذكاء الاصطناعي
 function makeAiMoveIfAiTurn(roomCode, room) {
     if (!room || !room.isAi || !room.gameState) return;
     const state = room.gameState;
 
+    // التحقق مما إذا كان الدور الحالي للكمبيوتر
     if (state.players[state.turnIndex] !== 'AI_BOT') return;
 
+    // تأخير بسيط (1.2 ثانية) لمحاكاة تفكير الكمبيوتر
     setTimeout(() => {
+        // التأكد من أن اللاعب لم يغادر أثناء وقت التفكير
         if (!rooms[roomCode] || !rooms[roomCode].gameState) return;
 
         const aiHand = state.hands['AI_BOT'];
         const topCard = state.discardPile[0];
+
+        // البحث عن ورقة مطابقة في يد البوت (اللون أو القيمة)
         const cardIndex = aiHand.findIndex(card => card.v === topCard.v || card.s === topCard.s);
 
         if (cardIndex !== -1) {
+            // البوت وجد ورقة مطابقة -> يلعبه
             const cardToPlay = aiHand.splice(cardIndex, 1)[0];
             state.discardPile.unshift(cardToPlay);
 
+            // التحقق من فوز البوت
             if (aiHand.length === 0) {
                 io.to(roomCode).emit('gameOver', { winnerId: 'AI_BOT', reason: 'normal' });
                 delete rooms[roomCode];
                 return;
             }
         } else {
+            // البوت لم يجد ورقة مطابقة -> يسحب من السطح
             if (state.deck.length === 0 && state.discardPile.length > 1) {
                 const cardsToShuffle = state.discardPile.splice(1);
                 state.deck = cardsToShuffle.sort(() => Math.random() - 0.5);
@@ -93,6 +103,7 @@ function makeAiMoveIfAiTurn(roomCode, room) {
             }
         }
 
+        // نقل الدور للاعب الحقيقي وتحديث الواجهة
         state.turnIndex = 1 - state.turnIndex;
         sendGameStateToPlayers(roomCode, room);
 
@@ -102,43 +113,7 @@ function makeAiMoveIfAiTurn(roomCode, room) {
 io.on('connection', (socket) => {
     console.log('مستخدم متصل:', socket.id);
 
-    // حدث استقبال اللاعب العائد بعد تحديث الصفحة (Refresh)
-    socket.on('reconnectPlayer', (data) => {
-        const { roomCode, oldId } = data;
-        const room = rooms[roomCode];
-
-        if (room) {
-            if (disconnectTimeouts[oldId]) {
-                clearTimeout(disconnectTimeouts[oldId]);
-                delete disconnectTimeouts[oldId];
-            }
-
-            const playerIndex = room.players.indexOf(oldId);
-            if (playerIndex !== -1) {
-                room.players[playerIndex] = socket.id;
-                socket.join(roomCode);
-
-                if (room.gameState) {
-                    const state = room.gameState;
-                    
-                    const statePlayerIndex = state.players.indexOf(oldId);
-                    if (statePlayerIndex !== -1) {
-                        state.players[statePlayerIndex] = socket.id;
-                    }
-
-                    if (state.hands[oldId]) {
-                        state.hands[socket.id] = state.hands[oldId];
-                        delete state.hands[oldId];
-                    }
-
-                    socket.emit('gameStarted', roomCode);
-                    socket.emit('startGame', { message: 'تم إعادة الاتصال بنجاح!', isAi: room.isAi });
-                    sendGameStateToPlayers(roomCode, room);
-                }
-            }
-        }
-    });
-
+    // إنشاء غرفة للعب الجماعي المعتاد
     socket.on('createRoom', () => {
         const roomCode = generateRoomCode();
         rooms[roomCode] = { players: [socket.id], gameState: null, isAi: false };
@@ -146,6 +121,7 @@ io.on('connection', (socket) => {
         socket.emit('roomCreated', roomCode);
     });
 
+    // 🤖 حدث جديد: إنشاء غرفة ضد الذكاء الاصطناعي وبدء اللعب فوراً
     socket.on('createAIRoom', () => {
         const roomCode = generateRoomCode();
         rooms[roomCode] = { 
@@ -154,15 +130,21 @@ io.on('connection', (socket) => {
             isAi: true 
         };
         
+        // 1. إدخال اللاعب فعلياً في قناة الاتصال (Room)
         socket.join(roomCode);
+
+        // 2. إرسال رد للمتصفح لإخفاء شاشة البداية
         socket.emit('gameStarted', roomCode); 
+        
+        // 3. إرسال أحداث الانضمام وبدء اللعبة
         socket.emit('roomCreated', roomCode);
         socket.emit('roomJoined', roomCode);
         
-        io.to(socket.id).emit('startGame', { message: 'بدأت اللعبة ضد الكمبيوتر 🤖!', isAi: true });
+        // 4. بدء اللعبة وتوزيع الأوراق فوراً
+        io.to(socket.id).emit('startGame', { message: 'بدأت اللعبة ضد الكمبيوتر 🤖!' });
         rooms[roomCode].gameState = initGame(socket.id, 'AI_BOT');
         sendGameStateToPlayers(roomCode, rooms[roomCode]);
-    });
+    }); // تم إصلاح مكان الإغلاق هنا ليكون شاملاً لكل العمليات!
 
     socket.on('joinRoom', (roomCode) => {
         const room = rooms[roomCode];
@@ -175,7 +157,7 @@ io.on('connection', (socket) => {
             socket.emit('roomJoined', roomCode);
             
             if (room.players.length === 2) {
-                io.to(roomCode).emit('startGame', { message: 'اكتمل العدد، ستبدأ اللعبة!', isAi: false });
+                io.to(roomCode).emit('startGame', { message: 'اكتمل العدد، ستبدأ اللعبة!' });
                 room.gameState = initGame(room.players[0], room.players[1]);
                 sendGameStateToPlayers(roomCode, room);
             }
@@ -214,6 +196,7 @@ io.on('connection', (socket) => {
         state.turnIndex = 1 - state.turnIndex;
         sendGameStateToPlayers(data.roomCode, room);
 
+        // تشغيل دور الـ AI إذا كانت الغرفة ضده
         if (room.isAi) {
             makeAiMoveIfAiTurn(data.roomCode, room);
         }
@@ -240,20 +223,26 @@ io.on('connection', (socket) => {
             state.turnIndex = 1 - state.turnIndex;
             sendGameStateToPlayers(roomCode, room);
 
+            // تشغيل دور الـ AI بعد سحب اللاعب لكارت
             if (room.isAi) {
                 makeAiMoveIfAiTurn(roomCode, room);
             }
         }
     });
 
+    // طلب إعادة اللعب (Rematch)
     socket.on('requestRematch', (roomCode) => {
         const room = rooms[roomCode];
         if (!room) return;
 
         if (room.isAi) {
-            io.to(socket.id).emit('startGame', { message: 'بدأت جولة جديدة!', isAi: true });
+            // إعادة تهيئة الأوراق وإرسال حالة اللعبة الجديدة فوراً للكمبيوتر
             room.gameState = initGame(socket.id, 'AI_BOT');
+            io.to(socket.id).emit('startGame', { message: 'بدأت جولة جديدة!', isAi: true });
             sendGameStateToPlayers(roomCode, room);
+        } else {
+            // منطق اللاعبين الحقيقيين (إذا أردت تفعيله لاحقاً)
+            socket.to(roomCode).emit('opponentWantsRematch');
         }
     });
 
@@ -265,8 +254,9 @@ io.on('connection', (socket) => {
             if (playerIndex !== -1) {
                 const disconnectedId = socket.id;
 
+                // إعطاء مهلة 30 ثانية قبل تدمير الغرفة أو إعلان فوز الخصم
                 disconnectTimeouts[disconnectedId] = setTimeout(() => {
-                    if (!rooms[roomCode]) return; 
+                    if (!rooms[roomCode]) return; // الغرفة غير موجودة بالفعل
 
                     if (room.isAi) {
                         delete rooms[roomCode];
@@ -283,14 +273,13 @@ io.on('connection', (socket) => {
                         io.to(roomCode).emit('playerLeft', 'غادر اللاعب الغرفة لانقطاع الاتصال.');
                         delete rooms[roomCode];
                     }
-                    delete disconnectTimeouts[disconnectedId]; 
-                }, 30000); 
+                    delete disconnectTimeouts[disconnectedId]; // تنظيف
+                }, 30000); // 30 ثانية
                 
                 break;
             }
         }
     });
-});
 
 const PORT = process.env.PORT || 10000;
 http.listen(PORT, () => console.log(`السيرفر يعمل على المنفذ ${PORT}`));
