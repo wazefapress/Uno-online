@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "4ab985b4-f6e0-41dc-a326-da6ddb4aa76c"
+      }
+    },
+    "android": {
+      "package": "com.wazefapress.uno"
+    }
+  }
+}
