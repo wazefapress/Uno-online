@@ -259,6 +259,10 @@ io.on('connection', (socket) => {
         }
     });
 });
+// قراءة المنفذ الديناميكي من Railway أو استخدام 3000 محلياً
+const PORT = process.env.PORT || 3000;
 
-const PORT = process.env.PORT || 10000;
-http.listen(PORT, () => console.log(`السيرفر يعمل على المنفذ ${PORT}`));
+// تشغيل سيرفر الـ Express والـ Socket.io على هذا المنفذ
+server.listen(PORT, () => {
+    console.log(`UNO Server is running on port ${PORT}`);
+});
