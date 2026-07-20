@@ -236,8 +236,10 @@ socket.on('requestRematch', (roomCode) => {
         if (!room) return;
 
         if (room.isAi) {
-            // إعادة توزيع 7 أوراق جديدة وتحديث حالة اللعبة للبوت
+            // إعادة تهيئة أوراق جديدة بالكامل للجولة القادمة
             room.gameState = initGame(socket.id, 'AI_BOT');
+            
+            // إرسال إشارة بدء اللعب تليها مباشرة تحديث الحالة
             io.to(socket.id).emit('startGame', { message: 'بدأت جولة جديدة!', isAi: true });
             sendGameStateToPlayers(roomCode, room);
         } else {
