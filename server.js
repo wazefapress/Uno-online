@@ -230,18 +230,17 @@ io.on('connection', (socket) => {
         }
     });
 
-    // طلب إعادة اللعب (Rematch)
-    socket.on('requestRematch', (roomCode) => {
+   
+socket.on('requestRematch', (roomCode) => {
         const room = rooms[roomCode];
         if (!room) return;
 
         if (room.isAi) {
-            // إعادة تهيئة الأوراق وإرسال حالة اللعبة الجديدة فوراً للكمبيوتر
+            // إعادة توزيع 7 أوراق جديدة وتحديث حالة اللعبة للبوت
             room.gameState = initGame(socket.id, 'AI_BOT');
             io.to(socket.id).emit('startGame', { message: 'بدأت جولة جديدة!', isAi: true });
             sendGameStateToPlayers(roomCode, room);
         } else {
-            // منطق اللاعبين الحقيقيين (إذا أردت تفعيله لاحقاً)
             socket.to(roomCode).emit('opponentWantsRematch');
         }
     });
