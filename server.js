@@ -88,7 +88,7 @@ function makeAiMoveIfAiTurn(roomCode, room) {
             // التحقق من فوز البوت
             if (aiHand.length === 0) {
                 io.to(roomCode).emit('gameOver', { winnerId: 'AI_BOT', reason: 'normal' });
-                delete rooms[roomCode];
+                // ❌ تم إزالة حذف الغرفة من هنا لكي تعمل إعادة اللعب
                 return;
             }
         } else {
@@ -141,10 +141,10 @@ io.on('connection', (socket) => {
         socket.emit('roomJoined', roomCode);
         
         // 4. بدء اللعبة وتوزيع الأوراق فوراً
-        io.to(socket.id).emit('startGame', { message: 'بدأت اللعبة ضد الكمبيوتر 🤖!' });
+        io.to(socket.id).emit('startGame', { message: 'بدأت اللعبة ضد الكمبيوتر 🤖!', isAi: true });
         rooms[roomCode].gameState = initGame(socket.id, 'AI_BOT');
         sendGameStateToPlayers(roomCode, rooms[roomCode]);
-    }); // تم إصلاح مكان الإغلاق هنا ليكون شاملاً لكل العمليات!
+    });
 
     socket.on('joinRoom', (roomCode) => {
         const room = rooms[roomCode];
@@ -157,7 +157,7 @@ io.on('connection', (socket) => {
             socket.emit('roomJoined', roomCode);
             
             if (room.players.length === 2) {
-                io.to(roomCode).emit('startGame', { message: 'اكتمل العدد، ستبدأ اللعبة!' });
+                io.to(roomCode).emit('startGame', { message: 'اكتمل العدد، ستبدأ اللعبة!', isAi: false });
                 room.gameState = initGame(room.players[0], room.players[1]);
                 sendGameStateToPlayers(roomCode, room);
             }
@@ -189,7 +189,7 @@ io.on('connection', (socket) => {
 
         if (playerHand.length === 0) {
             io.to(data.roomCode).emit('gameOver', { winnerId: playerId, reason: 'normal' });
-            delete rooms[data.roomCode];
+            // ❌ تم إزالة حذف الغرفة من هنا لكي تعمل إعادة اللعب
             return;
         }
 
@@ -230,8 +230,7 @@ io.on('connection', (socket) => {
         }
     });
 
-   
-socket.on('requestRematch', (roomCode) => {
+    socket.on('requestRematch', (roomCode) => {
         const room = rooms[roomCode];
         if (!room) return;
 
@@ -281,6 +280,7 @@ socket.on('requestRematch', (roomCode) => {
             }
         }
     });
+});
 
 const PORT = process.env.PORT || 10000;
 http.listen(PORT, () => console.log(`السيرفر يعمل على المنفذ ${PORT}`));
