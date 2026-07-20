@@ -7,7 +7,19 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "socket.io": "^4.7.2"
-  }
+    "express": "^4.22.2",
+    "socket.io": "^4.8.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wazefapress/Uno-online.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/wazefapress/Uno-online/issues"
+  },
+  "homepage": "https://github.com/wazefapress/Uno-online#readme"
 }
