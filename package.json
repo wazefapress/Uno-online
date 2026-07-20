@@ -1,7 +1,7 @@
 {
-  "name": "uno-server",
+  "name": "uno-online-server",
   "version": "1.0.0",
-  "description": "UNO Game Server",
+  "description": "Authoritative Server for UNO Online",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
