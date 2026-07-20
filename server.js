@@ -20,7 +20,7 @@ function generateDeck() {
     return deck.sort(() => Math.random() - 0.5);
 }
 
-// تم التحديث: توزيع 7 أوراق لكل لاعب
+// توزيع 7 أوراق لكل لاعب
 function initGame(player1, player2) {
     const deck = generateDeck();
     const player1Hand = [];
@@ -46,7 +46,6 @@ function initGame(player1, player2) {
 function sendGameStateToPlayers(roomCode, room) {
     const state = room.gameState;
     room.players.forEach((playerId, index) => {
-        // إذا كان المعرف هو البوت، لا نرسل له عبر السوكيت
         if (playerId === 'AI_BOT') return;
 
         const opponentId = room.players[1 - index];
@@ -109,13 +108,11 @@ io.on('connection', (socket) => {
         const room = rooms[roomCode];
 
         if (room) {
-            // إيقاف مؤقت الحذف لأن اللاعب عاد
             if (disconnectTimeouts[oldId]) {
                 clearTimeout(disconnectTimeouts[oldId]);
                 delete disconnectTimeouts[oldId];
             }
 
-            // تحديث المعرف
             const playerIndex = room.players.indexOf(oldId);
             if (playerIndex !== -1) {
                 room.players[playerIndex] = socket.id;
@@ -135,7 +132,7 @@ io.on('connection', (socket) => {
                     }
 
                     socket.emit('gameStarted', roomCode);
-                    socket.emit('startGame', { message: 'تم إعادة الاتصال بنجاح!' });
+                    socket.emit('startGame', { message: 'تم إعادة الاتصال بنجاح!', isAi: room.isAi });
                     sendGameStateToPlayers(roomCode, room);
                 }
             }
@@ -162,7 +159,7 @@ io.on('connection', (socket) => {
         socket.emit('roomCreated', roomCode);
         socket.emit('roomJoined', roomCode);
         
-        io.to(socket.id).emit('startGame', { message: 'بدأت اللعبة ضد الكمبيوتر 🤖!' });
+        io.to(socket.id).emit('startGame', { message: 'بدأت اللعبة ضد الكمبيوتر 🤖!', isAi: true });
         rooms[roomCode].gameState = initGame(socket.id, 'AI_BOT');
         sendGameStateToPlayers(roomCode, rooms[roomCode]);
     });
@@ -178,7 +175,7 @@ io.on('connection', (socket) => {
             socket.emit('roomJoined', roomCode);
             
             if (room.players.length === 2) {
-                io.to(roomCode).emit('startGame', { message: 'اكتمل العدد، ستبدأ اللعبة!' });
+                io.to(roomCode).emit('startGame', { message: 'اكتمل العدد، ستبدأ اللعبة!', isAi: false });
                 room.gameState = initGame(room.players[0], room.players[1]);
                 sendGameStateToPlayers(roomCode, room);
             }
@@ -254,13 +251,12 @@ io.on('connection', (socket) => {
         if (!room) return;
 
         if (room.isAi) {
-            io.to(socket.id).emit('startGame', { message: 'بدأت جولة جديدة!' });
+            io.to(socket.id).emit('startGame', { message: 'بدأت جولة جديدة!', isAi: true });
             room.gameState = initGame(socket.id, 'AI_BOT');
             sendGameStateToPlayers(roomCode, room);
         }
     });
 
-    // تم التحديث: معالجة الانقطاع بمهلة 30 ثانية
     socket.on('disconnect', () => {
         for (const roomCode in rooms) {
             const room = rooms[roomCode];
