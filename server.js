@@ -149,9 +149,15 @@ io.on('connection', (socket) => {
     socket.on('joinRoom', (roomCode) => {
         const room = rooms[roomCode];
         if (room) {
+            // 🛑 التعديل الجديد: منع اللاعب من الانضمام لغرفته الخاصة مرة أخرى
+            if (room.players.includes(socket.id)) {
+                return socket.emit('errorMsg', 'أنت متواجد في هذه الغرفة بالفعل! شارك الكود أو الرابط مع صديقك بانتظار انضمامه...');
+            }
+
             if (room.players.length >= 2 || room.isAi) {
                 return socket.emit('errorMsg', 'الغرفة ممتلئة أو مخصصة للكمبيوتر!');
             }
+            
             room.players.push(socket.id);
             socket.join(roomCode);
             socket.emit('roomJoined', roomCode);
@@ -165,7 +171,6 @@ io.on('connection', (socket) => {
             socket.emit('errorMsg', 'كود الغرفة غير صحيح!');
         }
     });
-
     socket.on('playCard', (data) => {
         const room = rooms[data.roomCode];
         if (!room || !room.gameState) return;
