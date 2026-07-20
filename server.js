@@ -21,12 +21,22 @@ function generateDeck() {
 
 function initGame(player1, player2) {
     const deck = generateDeck();
+    
+    // سحب 7 أوراق لكل لاعب باستخدام حلقة تكرار بدلاً من السحب اليدوي
+    const player1Hand = [];
+    const player2Hand = [];
+    
+    for (let i = 0; i < 7; i++) {
+        player1Hand.push(deck.pop());
+        player2Hand.push(deck.pop());
+    }
+
     return {
         deck: deck,
-        discardPile: [deck.pop()],
+        discardPile: [deck.pop()], // سحب أول ورقة لتكون على الطاولة
         hands: {
-            [player1]: [deck.pop(), deck.pop(), deck.pop(), deck.pop()],
-            [player2]: [deck.pop(), deck.pop(), deck.pop(), deck.pop()]
+            [player1]: player1Hand,
+            [player2]: player2Hand
         },
         turnIndex: 0,
         players: [player1, player2]
