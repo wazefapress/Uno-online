@@ -260,7 +260,7 @@ io.on('connection', (socket) => {
     });
 });
 // قراءة المنفذ الديناميكي من Railway أو استخدام 3000 محلياً
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
 // تشغيل سيرفر الـ Express والـ Socket.io على هذا المنفذ
 server.listen(PORT, () => {
