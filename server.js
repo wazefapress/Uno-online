@@ -118,6 +118,15 @@ io.on('connection', (socket) => {
             gameState: null, 
             isAi: true 
         };
+        // 1. إدخال اللاعب فعلياً في قناة الاتصال (Room) الخاصة بـ Socket.io
+    socket.join(roomCode);
+
+    // 2. النقطة الأهم: إرسال الرد للمتصفح ليبدأ اللعبة ويغير الشاشة!
+    // (تأكد من أن اسم الحدث هنا يطابق ما برمجته في الواجهة)
+    socket.emit('gameStarted', roomCode); 
+    
+    // ملاحظة: لا تنسَ إغلاق القوسين في النهاية
+});
         socket.join(roomCode);
         socket.emit('roomCreated', roomCode);
         socket.emit('roomJoined', roomCode);
