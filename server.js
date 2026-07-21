@@ -103,7 +103,6 @@ io.on('connection', (socket) => {
     });
 
     // 4. المحادثة الفورية (Chat)
-    // 4. المحادثة الفورية (Chat)
     socket.on('sendChatMessage', ({ roomCode, message }) => {
         if (!roomCode || !message) return;
 
@@ -120,7 +119,7 @@ io.on('connection', (socket) => {
         });
     });
 
-    // إعادة الاتصال (Reconnect) - تم إضافة نقل اسم اللاعب عند انقطاع الاتصال
+    // 5. إعادة الاتصال (Reconnect)
     socket.on('reconnectPlayer', ({ roomCode, oldId }) => {
         const cleanCode = roomCode ? roomCode.toUpperCase().trim() : '';
         const room = rooms[cleanCode];
@@ -145,6 +144,7 @@ io.on('connection', (socket) => {
         }
     });
 
+    // 6. بدء جولة جديدة
     function startNewRound(roomCode) {
         const room = rooms[roomCode];
         if (!room) return;
@@ -159,8 +159,14 @@ io.on('connection', (socket) => {
         io.to(roomCode).emit('startGame', { isAi: room.isAi });
         io.to(roomCode).emit('newRoundStarted');
         updateGameState(roomCode);
+
+        // 🟢 تفعيل دور الذكاء الاصطناعي تلقائياً إذا جاء الدور عليه عند بدء الجولة
+        if (room.isAi && room.players[room.turnIndex] === 'AI_PLAYER') {
+            setTimeout(() => processAiTurn(roomCode), 1000);
+        }
     }
 
+    // 7. تحديث حالة اللعبة
     function updateGameState(roomCode) {
         const room = rooms[roomCode];
         if (!room) return;
@@ -184,6 +190,7 @@ io.on('connection', (socket) => {
         });
     }
 
+    // 8. لعب ورقة
     socket.on('playCard', ({ roomCode, cardIndex }) => {
         const room = rooms[roomCode];
         if (!room) return;
@@ -215,6 +222,7 @@ io.on('connection', (socket) => {
         }
     });
 
+    // 9. سحب ورقة
     socket.on('drawCard', (roomCode) => {
         const room = rooms[roomCode];
         if (!room) return;
@@ -237,6 +245,7 @@ io.on('connection', (socket) => {
         }
     });
 
+    // 10. معالجة دور الكمبيوتر (AI)
     function processAiTurn(roomCode) {
         const room = rooms[roomCode];
         if (!room || room.players[room.turnIndex] !== 'AI_PLAYER') return;
@@ -261,6 +270,7 @@ io.on('connection', (socket) => {
         updateGameState(roomCode);
     }
 
+    // 11. انتهاء الجولة وحساب النقاط
     function handleRoundWin(roomCode, winnerId) {
         const room = rooms[roomCode];
         const opponentId = room.players.find(id => id !== winnerId);
@@ -284,23 +294,7 @@ io.on('connection', (socket) => {
         }
     }
 
-    socket.on('reconnectPlayer', ({ roomCode, oldId }) => {
-        const room = rooms[roomCode];
-        if (room) {
-            const index = room.players.indexOf(oldId);
-            if (index !== -1) {
-                room.players[index] = socket.id;
-                room.hands[socket.id] = room.hands[oldId];
-                delete room.hands[oldId];
-                room.scores[socket.id] = room.scores[oldId];
-                delete room.scores[oldId];
-                
-                socket.join(roomCode);
-                updateGameState(roomCode);
-            }
-        }
-    });
-
+    // 12. انقطاع الاتصال
     socket.on('disconnect', () => {
         console.log(`مستخدم انقطع: ${socket.id}`);
     });
