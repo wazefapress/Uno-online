@@ -13,16 +13,24 @@ function generateRoomCode() {
 }
 
 function generateDeck() {
-    const suits = ['♥', '♦', '♣', '♠'];
+    const suits = [
+        { s: '♥', color: 'red' },
+        { s: '♦', color: 'red' },
+        { s: '♣', color: 'black' },
+        { s: '♠', color: 'black' }
+    ];
     const values = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
     let deck = [];
-    suits.forEach(s => values.forEach(v => deck.push({v, s})));
+    suits.forEach(suitObj => {
+        values.forEach(v => {
+            deck.push({ v, s: suitObj.s, value: v, color: suitObj.color });
+        });
+    });
     return deck.sort(() => Math.random() - 0.5);
 }
 
-// 🎯 دالة جديدة لحساب مجموع الأوراق المتبقية في اليد
 function calculateHandPoints(hand) {
-    return hand.reduce((total, card) => total + parseInt(card.v), 0);
+    return hand.reduce((total, card) => total + parseInt(card.v || 0), 0);
 }
 
 function initGame(player1, player2) {
@@ -49,6 +57,8 @@ function initGame(player1, player2) {
 
 function sendGameStateToPlayers(roomCode, room) {
     const state = room.gameState;
+    if (!state) return;
+
     room.players.forEach((playerId, index) => {
         if (playerId === 'AI_BOT') return;
 
@@ -58,10 +68,14 @@ function sendGameStateToPlayers(roomCode, room) {
             myHand: state.hands[playerId],
             opponentCardCount: state.hands[opponentId] ? state.hands[opponentId].length : 0,
             isMyTurn: state.players[state.turnIndex] === playerId,
-            myScore: room.scores[playerId] || 0, // 🎯 إرسال نقاط اللاعب
-            opponentScore: room.scores[opponentId] || 0 // 🎯 إرسال نقاط الخصم
+            currentTurnPlayerId: state.players[state.turnIndex],
+            currentTurnPlayerName: room.playerNames[state.players[state.turnIndex]] || 'المنافس',
+            myScore: room.scores[playerId] || 0,
+            opponentScore: room.scores[opponentId] || 0
         };
+        
         io.to(playerId).emit('updateGameState', sanitizedState);
+        io.to(playerId).emit('gameState', sanitizedState);
     });
 }
 
@@ -77,28 +91,25 @@ function makeAiMoveIfAiTurn(roomCode, room) {
         const aiHand = state.hands['AI_BOT'];
         const topCard = state.discardPile[0];
 
-        // 🤖 إذا بقيت ورقتان للكمبيوتر، يصيح UNO تلقائياً!
         if (aiHand.length === 2) {
-            io.to(roomCode).emit('playerSaidUno', { playerId: 'AI_BOT', name: 'الكمبيوتر 🤖' });
+            io.to(roomCode).emit('playerSaidUno', { playerId: 'AI_BOT', playerName: 'الكمبيوتر 🤖', message: '🔥 قال UNO!' });
         }
 
-        const cardIndex = aiHand.findIndex(card => card.v === topCard.v || card.s === topCard.s);
+        const cardIndex = aiHand.findIndex(card => card.v === topCard.v || card.s === topCard.s || card.color === topCard.color);
 
         if (cardIndex !== -1) {
             const cardToPlay = aiHand.splice(cardIndex, 1)[0];
             state.discardPile.unshift(cardToPlay);
 
             if (aiHand.length === 0) {
-                // 🎯 الذكاء الاصطناعي فاز بالجولة
                 const playerId = room.players[0];
-                const pointsEarned = calculateHandPoints(state.hands[playerId]);
+                const pointsEarned = calculateHandPoints(state.hands[playerId] || []);
                 room.scores['AI_BOT'] += pointsEarned;
 
                 if (room.scores['AI_BOT'] >= 100) {
-                    io.to(roomCode).emit('gameOver', { winnerId: 'AI_BOT', reason: 'normal' });
+                    io.to(roomCode).emit('gameOver', { winnerId: 'AI_BOT', winnerName: 'الكمبيوتر 🤖', reason: 'normal' });
                 } else {
-                    io.to(roomCode).emit('roundOver', { winnerId: 'AI_BOT', pointsWon: pointsEarned });
-                    // بدء جولة جديدة تلقائياً بعد 4 ثوانٍ
+                    io.to(roomCode).emit('roundOver', { winnerId: 'AI_BOT', winnerName: 'الكمبيوتر 🤖', pointsWon: pointsEarned });
                     setTimeout(() => {
                         if (rooms[roomCode]) {
                             room.gameState = initGame(room.players[0], 'AI_BOT');
@@ -129,54 +140,83 @@ function makeAiMoveIfAiTurn(roomCode, room) {
 io.on('connection', (socket) => {
     console.log('مستخدم متصل:', socket.id);
 
-    socket.on('createRoom', () => {
+    socket.on('createRoom', (data) => {
         const roomCode = generateRoomCode();
-        // 🎯 تهيئة كائن لحفظ النقاط
-        rooms[roomCode] = { players: [socket.id], gameState: null, isAi: false, scores: {} };
+        const playerName = (data && data.playerName) ? data.playerName : 'لاعب 1';
+
+        rooms[roomCode] = { 
+            players: [socket.id], 
+            playerNames: { [socket.id]: playerName },
+            gameState: null, 
+            isAi: false, 
+            scores: { [socket.id]: 0 } 
+        };
+
         socket.join(roomCode);
-        socket.emit('roomCreated', roomCode);
+        socket.emit('roomCreated', { 
+            roomCode, 
+            players: [{ id: socket.id, name: playerName, isHost: true }] 
+        });
     });
 
-    socket.on('createAIRoom', () => {
+    socket.on('createAIRoom', (data) => {
         const roomCode = generateRoomCode();
+        const playerName = (data && data.playerName) ? data.playerName : 'لاعب 1';
+
         rooms[roomCode] = { 
             players: [socket.id, 'AI_BOT'], 
+            playerNames: { [socket.id]: playerName, 'AI_BOT': 'الكمبيوتر 🤖' },
             gameState: null, 
             isAi: true,
-            scores: { [socket.id]: 0, 'AI_BOT': 0 } // 🎯 تصفير النقاط
+            scores: { [socket.id]: 0, 'AI_BOT': 0 }
         };
         
         socket.join(roomCode);
-        socket.emit('gameStarted', roomCode); 
-        socket.emit('roomCreated', roomCode);
-        socket.emit('roomJoined', roomCode);
         
-        io.to(socket.id).emit('startGame', { message: 'بدأت اللعبة ضد الكمبيوتر 🤖!', isAi: true });
+        const playerList = [
+            { id: socket.id, name: playerName, isHost: true },
+            { id: 'AI_BOT', name: 'الكمبيوتر 🤖', isHost: false }
+        ];
+
+        socket.emit('roomCreated', { roomCode, players: playerList });
+        socket.emit('roomJoined', { roomCode, players: playerList });
+        
         rooms[roomCode].gameState = initGame(socket.id, 'AI_BOT');
+        io.to(socket.id).emit('gameStarted', rooms[roomCode].gameState);
         sendGameStateToPlayers(roomCode, rooms[roomCode]);
     });
 
-    socket.on('joinRoom', (roomCode) => {
+    socket.on('joinRoom', (data) => {
+        const roomCode = typeof data === 'string' ? data : data.roomCode;
+        const playerName = (data && data.playerName) ? data.playerName : 'لاعب 2';
+
         const room = rooms[roomCode];
         if (room) {
             if (room.players.includes(socket.id)) {
-                return socket.emit('errorMsg', 'أنت متواجد في هذه الغرفة بالفعل! شارك الكود أو الرابط مع صديقك بانتظار انضمامه...');
+                return socket.emit('errorMsg', 'أنت متواجد في هذه الغرفة بالفعل!');
             }
-
             if (room.players.length >= 2 || room.isAi) {
                 return socket.emit('errorMsg', 'الغرفة ممتلئة أو مخصصة للكمبيوتر!');
             }
+
             room.players.push(socket.id);
+            room.playerNames[socket.id] = playerName;
+            room.scores[socket.id] = 0;
+
             socket.join(roomCode);
-            socket.emit('roomJoined', roomCode);
             
+            const playerList = room.players.map(id => ({
+                id: id,
+                name: room.playerNames[id] || 'لاعب',
+                isHost: id === room.players[0]
+            }));
+
+            socket.emit('roomJoined', { roomCode, players: playerList });
+            io.to(roomCode).emit('updatePlayerList', playerList);
+
             if (room.players.length === 2) {
-                // 🎯 تصفير النقاط عند اكتمال اللاعبين
-                room.scores[room.players[0]] = 0;
-                room.scores[room.players[1]] = 0;
-                
-                io.to(roomCode).emit('startGame', { message: 'اكتمل العدد، ستبدأ اللعبة!', isAi: false });
                 room.gameState = initGame(room.players[0], room.players[1]);
+                io.to(roomCode).emit('gameStarted', room.gameState);
                 sendGameStateToPlayers(roomCode, room);
             }
         } else {
@@ -184,31 +224,37 @@ io.on('connection', (socket) => {
         }
     });
 
-    // =========================================================
-    // 💥 [جديد] استقبال حدث قول UNO وتعميمه على الغرفة
-    // =========================================================
-    socket.on('sayUno', (roomCode) => {
-        let targetRoomCode = roomCode;
+    socket.on('startGame', (data) => {
+        const roomCode = typeof data === 'string' ? data : data.roomCode;
+        const room = rooms[roomCode];
+        if (room && room.players.length === 2) {
+            room.gameState = initGame(room.players[0], room.players[1]);
+            io.to(roomCode).emit('gameStarted', room.gameState);
+            sendGameStateToPlayers(roomCode, room);
+        }
+    });
 
-        // البحث عن الغرفة إذا لم يتم إرسال الكود مباشرة
-        if (!targetRoomCode) {
+    socket.on('sayUno', (data) => {
+        let roomCode = typeof data === 'string' ? data : data?.roomCode;
+
+        if (!roomCode) {
             for (const code in rooms) {
                 if (rooms[code].players.includes(socket.id)) {
-                    targetRoomCode = code;
+                    roomCode = code;
                     break;
                 }
             }
         }
 
-        const room = rooms[targetRoomCode];
+        const room = rooms[roomCode];
         if (!room || !room.gameState) return;
 
         const playerHand = room.gameState.hands[socket.id];
 
-        // التحقق من أن أوراق اللاعب 2 أو أقل للنداء بـ UNO
         if (playerHand && playerHand.length <= 2) {
-            io.to(targetRoomCode).emit('playerSaidUno', {
+            io.to(roomCode).emit('playerSaidUno', {
                 playerId: socket.id,
+                playerName: room.playerNames[socket.id] || 'لاعب',
                 message: '🔥 قال UNO!'
             });
         } else {
@@ -217,7 +263,10 @@ io.on('connection', (socket) => {
     });
 
     socket.on('playCard', (data) => {
-        const room = rooms[data.roomCode];
+        const roomCode = typeof data === 'string' ? data : data.roomCode;
+        const cardIndex = data.cardIndex;
+
+        const room = rooms[roomCode];
         if (!room || !room.gameState) return;
 
         const state = room.gameState;
@@ -226,34 +275,31 @@ io.on('connection', (socket) => {
         if (state.players[state.turnIndex] !== playerId) return;
 
         const playerHand = state.hands[playerId];
-        const cardToPlay = playerHand[data.cardIndex];
+        const cardToPlay = playerHand[cardIndex];
         if (!cardToPlay) return socket.emit('errorMsg', 'الورقة غير موجودة!');
 
         const topCard = state.discardPile[0];
-        if (cardToPlay.v !== topCard.v && cardToPlay.s !== topCard.s) {
+        if (cardToPlay.v !== topCard.v && cardToPlay.s !== topCard.s && cardToPlay.color !== topCard.color) {
             return socket.emit('errorMsg', 'حركة غير قانونية!');
         }
 
-        playerHand.splice(data.cardIndex, 1);
+        playerHand.splice(cardIndex, 1);
         state.discardPile.unshift(cardToPlay);
 
         if (playerHand.length === 0) {
-            // 🎯 اللاعب الحقيقي فاز بالجولة
             const opponentId = room.players.find(id => id !== playerId);
-            const pointsEarned = calculateHandPoints(state.hands[opponentId]);
-            room.scores[playerId] += pointsEarned;
+            const pointsEarned = calculateHandPoints(state.hands[opponentId] || []);
+            room.scores[playerId] = (room.scores[playerId] || 0) + pointsEarned;
 
             if (room.scores[playerId] >= 100) {
-                // 🎯 إذا وصل 100 نقطة، تنتهي اللعبة
-                io.to(data.roomCode).emit('gameOver', { winnerId: playerId, reason: 'normal' });
+                io.to(roomCode).emit('gameOver', { winnerId: playerId, winnerName: room.playerNames[playerId], reason: 'normal' });
             } else {
-                // 🎯 إذا لم يصل، ننهي الجولة فقط ونبدأ أخرى
-                io.to(data.roomCode).emit('roundOver', { winnerId: playerId, pointsWon: pointsEarned });
+                io.to(roomCode).emit('roundOver', { winnerId: playerId, winnerName: room.playerNames[playerId], pointsWon: pointsEarned });
                 setTimeout(() => {
-                    if (rooms[data.roomCode]) {
+                    if (rooms[roomCode]) {
                         room.gameState = initGame(room.players[0], room.players[1]);
-                        io.to(data.roomCode).emit('newRoundStarted');
-                        sendGameStateToPlayers(data.roomCode, room);
+                        io.to(roomCode).emit('newRoundStarted');
+                        sendGameStateToPlayers(roomCode, room);
                     }
                 }, 4000);
             }
@@ -261,14 +307,15 @@ io.on('connection', (socket) => {
         }
 
         state.turnIndex = 1 - state.turnIndex;
-        sendGameStateToPlayers(data.roomCode, room);
+        sendGameStateToPlayers(roomCode, room);
 
         if (room.isAi) {
-            makeAiMoveIfAiTurn(data.roomCode, room);
+            makeAiMoveIfAiTurn(roomCode, room);
         }
     });
 
-    socket.on('drawCard', (roomCode) => {
+    socket.on('drawCard', (data) => {
+        const roomCode = typeof data === 'string' ? data : data?.roomCode;
         const room = rooms[roomCode];
         if (!room || !room.gameState) return;
         const state = room.gameState;
@@ -295,7 +342,8 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('requestRematch', (roomCode) => {
+    socket.on('requestRematch', (data) => {
+        const roomCode = typeof data === 'string' ? data : data?.roomCode;
         const room = rooms[roomCode];
         if (!room) return;
 
@@ -303,7 +351,7 @@ io.on('connection', (socket) => {
             room.scores[socket.id] = 0;
             room.scores['AI_BOT'] = 0;
             room.gameState = initGame(socket.id, 'AI_BOT');
-            io.to(socket.id).emit('startGame', { message: 'بدأت جولة جديدة!', isAi: true });
+            io.to(socket.id).emit('gameStarted', room.gameState);
             sendGameStateToPlayers(roomCode, room);
         } else {
             socket.to(roomCode).emit('opponentWantsRematch');
@@ -328,6 +376,7 @@ io.on('connection', (socket) => {
                         if (remainingPlayer) {
                             io.to(remainingPlayer).emit('gameOver', { 
                                 winnerId: remainingPlayer,
+                                winnerName: room.playerNames[remainingPlayer],
                                 reason: 'opponent_left'
                             });
                         }
