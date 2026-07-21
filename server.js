@@ -1,9 +1,13 @@
 const express = require('express');
+const path = require('path');
 const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http, {
     cors: { origin: "*" }
 });
+
+// 🌟 [إضافة حاسمة] هذا السطر يجعل السيرفر يعرض ملفات (HTML, CSS, JS) مباشرة
+app.use(express.static(__dirname));
 
 const rooms = {};
 const disconnectTimeouts = {};
