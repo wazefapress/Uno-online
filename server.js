@@ -73,7 +73,7 @@ io.on('connection', (socket) => {
             scores: { [socket.id]: 0, [aiId]: 0 },
             deck: [],
             topCard: null,
-            turnIndex: 0,
+            turnIndex: 0, // يبدأ الدور مباشرة للاعب البشري الأول
             isAi: true
         };
         socket.join(roomCode);
@@ -108,7 +108,11 @@ io.on('connection', (socket) => {
 
         room.deck = generateDeck();
         room.players.forEach(playerId => {
-            room.hands[playerId] = room.deck.splice(0, 7);
+            if (playerId !== 'AI_PLAYER') {
+                room.hands[playerId] = room.deck.splice(0, 7);
+            } else {
+                room.hands['AI_PLAYER'] = room.deck.splice(0, 7);
+            }
         });
         room.topCard = room.deck.pop();
         room.turnIndex = Math.floor(Math.random() * room.players.length);
@@ -118,7 +122,7 @@ io.on('connection', (socket) => {
         updateGameState(roomCode);
     }
 
-    // تحديث وإرسال حالة اللعبة لكل لاعب بشكل خاص (لحجب أوراق الخصم)
+    // تحديث وإرسال حالة اللعبة لكل لاعب بشكل خاص
     function updateGameState(roomCode) {
         const room = rooms[roomCode];
         if (!room) return;
@@ -153,20 +157,16 @@ io.on('connection', (socket) => {
 
         const cardToPlay = hand[cardIndex];
 
-        // التحقق من صحة القواعد (مطابقة الرقم أو مطابقة الشكل/اللون)
         if (cardToPlay.v === room.topCard.v || cardToPlay.s === room.topCard.s) {
             hand.splice(cardIndex, 1);
             room.topCard = cardToPlay;
 
-            // التحقق من فوز اللاعب بالجولة (تخلص من كل أوراقه)
             if (hand.length === 0) {
                 handleRoundWin(roomCode, socket.id);
             } else {
-                // الانتقال لدور اللاعب التالي
                 room.turnIndex = (room.turnIndex + 1) % room.players.length;
                 updateGameState(roomCode);
 
-                // إذا كان الدور القادم للـ AI
                 if (room.isAi && room.players[room.turnIndex] === 'AI_PLAYER') {
                     setTimeout(() => processAiTurn(roomCode), 1000);
                 }
@@ -185,13 +185,12 @@ io.on('connection', (socket) => {
         if (socket.id !== currentPlayerId) return;
 
         if (room.deck.length === 0) {
-            room.deck = generateDeck(); // إعادة تعبئة الكوم إذا نفد
+            room.deck = generateDeck();
         }
 
         const drawnCard = room.deck.pop();
         room.hands[socket.id].push(drawnCard);
 
-        // انتقال الدور للخصم بعد السحب
         room.turnIndex = (room.turnIndex + 1) % room.players.length;
         updateGameState(roomCode);
 
@@ -200,7 +199,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    // ذكاء اصطناعي بسيط يلعب دوره تلقائياً
+    // دور الذكاء الاصطناعي (AI)
     function processAiTurn(roomCode) {
         const room = rooms[roomCode];
         if (!room || room.players[room.turnIndex] !== 'AI_PLAYER') return;
@@ -225,7 +224,7 @@ io.on('connection', (socket) => {
         updateGameState(roomCode);
     }
 
-    // إدارة فوز لاعب بجولة وحساب النقاط
+    // إدارة فوز لاعب بالجولة
     function handleRoundWin(roomCode, winnerId) {
         const room = rooms[roomCode];
         const opponentId = room.players.find(id => id !== winnerId);
@@ -249,7 +248,7 @@ io.on('connection', (socket) => {
         }
     }
 
-    // إعادة الاتصال (Reconnect) في حال انقطع النت
+    // إعادة الاتصال (Reconnect)
     socket.on('reconnectPlayer', ({ roomCode, oldId }) => {
         const room = rooms[roomCode];
         if (room) {
