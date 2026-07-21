@@ -77,6 +77,11 @@ function makeAiMoveIfAiTurn(roomCode, room) {
         const aiHand = state.hands['AI_BOT'];
         const topCard = state.discardPile[0];
 
+        // 🤖 إذا بقيت ورقتان للكمبيوتر، يصيح UNO تلقائياً!
+        if (aiHand.length === 2) {
+            io.to(roomCode).emit('playerSaidUno', { playerId: 'AI_BOT', name: 'الكمبيوتر 🤖' });
+        }
+
         const cardIndex = aiHand.findIndex(card => card.v === topCard.v || card.s === topCard.s);
 
         if (cardIndex !== -1) {
@@ -176,6 +181,38 @@ io.on('connection', (socket) => {
             }
         } else {
             socket.emit('errorMsg', 'كود الغرفة غير صحيح!');
+        }
+    });
+
+    // =========================================================
+    // 💥 [جديد] استقبال حدث قول UNO وتعميمه على الغرفة
+    // =========================================================
+    socket.on('sayUno', (roomCode) => {
+        let targetRoomCode = roomCode;
+
+        // البحث عن الغرفة إذا لم يتم إرسال الكود مباشرة
+        if (!targetRoomCode) {
+            for (const code in rooms) {
+                if (rooms[code].players.includes(socket.id)) {
+                    targetRoomCode = code;
+                    break;
+                }
+            }
+        }
+
+        const room = rooms[targetRoomCode];
+        if (!room || !room.gameState) return;
+
+        const playerHand = room.gameState.hands[socket.id];
+
+        // التحقق من أن أوراق اللاعب 2 أو أقل للنداء بـ UNO
+        if (playerHand && playerHand.length <= 2) {
+            io.to(targetRoomCode).emit('playerSaidUno', {
+                playerId: socket.id,
+                message: '🔥 قال UNO!'
+            });
+        } else {
+            socket.emit('errorMsg', 'لا يمكنك قول UNO ولديك أكثر من ورقتين!');
         }
     });
 
