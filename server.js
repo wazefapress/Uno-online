@@ -18,17 +18,16 @@ app.use(express.static(path.join(__dirname, 'public')));
 // هيكل الغرف النشطة
 const rooms = {};
 
-// توليد مجموعة أوراق الأونو (الأرقام من 1 إلى 9 للأشكال الأربعة)
+// توليد مجموعة أوراق الأونو
 function generateDeck() {
     const suits = ['♥', '♠', '♦', '♣'];
     let deck = [];
     suits.forEach(suit => {
         for (let i = 1; i <= 9; i++) {
             deck.push({ v: i.toString(), s: suit });
-            deck.push({ v: i.toString(), s: suit }); // نسختين من كل رقم لزيادة الحصيلة
+            deck.push({ v: i.toString(), s: suit });
         }
     });
-    // خلط الأوراق عشوائياً (Shuffle)
     return deck.sort(() => Math.random() - 0.5);
 }
 
@@ -73,7 +72,7 @@ io.on('connection', (socket) => {
             scores: { [socket.id]: 0, [aiId]: 0 },
             deck: [],
             topCard: null,
-            turnIndex: 0, // يبدأ الدور مباشرة للاعب البشري الأول
+            turnIndex: 0,
             isAi: true
         };
         socket.join(roomCode);
@@ -108,11 +107,7 @@ io.on('connection', (socket) => {
 
         room.deck = generateDeck();
         room.players.forEach(playerId => {
-            if (playerId !== 'AI_PLAYER') {
-                room.hands[playerId] = room.deck.splice(0, 7);
-            } else {
-                room.hands['AI_PLAYER'] = room.deck.splice(0, 7);
-            }
+            room.hands[playerId] = room.deck.splice(0, 7);
         });
         room.topCard = room.deck.pop();
         room.turnIndex = Math.floor(Math.random() * room.players.length);
@@ -120,9 +115,14 @@ io.on('connection', (socket) => {
         io.to(roomCode).emit('startGame', { isAi: room.isAi });
         io.to(roomCode).emit('newRoundStarted');
         updateGameState(roomCode);
+
+        // ✅ إصلاح المشكلة: إذا كان الدور على الكمبيوتر في بداية الجولة، يتم استدعاء دوره تلقائياً
+        if (room.isAi && room.players[room.turnIndex] === 'AI_PLAYER') {
+            setTimeout(() => processAiTurn(roomCode), 1200);
+        }
     }
 
-    // تحديث وإرسال حالة اللعبة لكل لاعب بشكل خاص
+    // تحديث وإرسال حالة اللعبة لكل لاعب
     function updateGameState(roomCode) {
         const room = rooms[roomCode];
         if (!room) return;
@@ -227,6 +227,8 @@ io.on('connection', (socket) => {
     // إدارة فوز لاعب بالجولة
     function handleRoundWin(roomCode, winnerId) {
         const room = rooms[roomCode];
+        if (!room) return;
+
         const opponentId = room.players.find(id => id !== winnerId);
         
         let pointsWon = 0;
