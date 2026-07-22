@@ -50,6 +50,7 @@ io.on('connection', (socket) => {
             playerNames: { [socket.id]: playerName },
             hands: { [socket.id]: [] },
             scores: { [socket.id]: 0 },
+            unoPressed: { [socket.id]: false },
             deck: [],
             topCard: null,
             turnIndex: 0,
@@ -70,6 +71,7 @@ io.on('connection', (socket) => {
             playerNames: { [socket.id]: playerName, [aiId]: 'الكمبيوتر 🤖' },
             hands: { [socket.id]: [], [aiId]: [] },
             scores: { [socket.id]: 0, [aiId]: 0 },
+            unoPressed: { [socket.id]: false, [aiId]: true },
             deck: [],
             topCard: null,
             turnIndex: 0,
@@ -96,6 +98,7 @@ io.on('connection', (socket) => {
         room.playerNames[socket.id] = pName;
         room.hands[socket.id] = [];
         room.scores[socket.id] = 0;
+        room.unoPressed[socket.id] = false;
         socket.join(roomCode);
         
         socket.emit('roomJoined', roomCode);
@@ -119,7 +122,41 @@ io.on('connection', (socket) => {
         });
     });
 
-    // 5. إعادة الاتصال (Reconnect)
+    // 5. زر UNO
+    socket.on('pressUno', (roomCode) => {
+        const room = rooms[roomCode];
+        if (!room) return;
+
+        if (room.hands[socket.id] && room.hands[socket.id].length <= 2) {
+            room.unoPressed[socket.id] = true;
+            io.to(roomCode).emit('generalToast', `🗣️ ${room.playerNames[socket.id]} ضغط على زر UNO!`);
+            updateGameState(roomCode);
+        }
+    });
+
+    // 6. زر التحدي (Challenge)
+    socket.on('challengeUno', (roomCode) => {
+        const room = rooms[roomCode];
+        if (!room) return;
+
+        const opponentId = room.players.find(id => id !== socket.id);
+        if (!opponentId) return;
+
+        // التحقق مما إذا كان الخصم لديه ورقة واحدة ولم يضغط UNO
+        if (room.hands[opponentId] && room.hands[opponentId].length === 1 && !room.unoPressed[opponentId]) {
+            // عقوبة: سحب ورقتين للخصم
+            for (let i = 0; i < 2; i++) {
+                if (room.deck.length === 0) room.deck = generateDeck();
+                room.hands[opponentId].push(room.deck.pop());
+            }
+            io.to(roomCode).emit('generalToast', `⚠️ نجح التحدي! ${room.playerNames[opponentId]} نسي قول UNO وتمت معاقبته بسحب ورقتين! 🃏🃏`);
+            updateGameState(roomCode);
+        } else {
+            socket.emit('errorMsg', 'التحدي غير صحيح! الخصم ضغط UNO أو ليس لديه ورقة واحدة.');
+        }
+    });
+
+    // 7. إعادة الاتصال (Reconnect)
     socket.on('reconnectPlayer', ({ roomCode, oldId }) => {
         const cleanCode = roomCode ? roomCode.toUpperCase().trim() : '';
         const room = rooms[cleanCode];
@@ -131,8 +168,9 @@ io.on('connection', (socket) => {
                 delete room.hands[oldId];
                 room.scores[socket.id] = room.scores[oldId];
                 delete room.scores[oldId];
+                room.unoPressed[socket.id] = room.unoPressed[oldId] || false;
+                delete room.unoPressed[oldId];
 
-                // نقل اسم اللاعب للـ Socket ID الجديد
                 if (room.playerNames) {
                     room.playerNames[socket.id] = room.playerNames[oldId] || 'لاعب';
                     delete room.playerNames[oldId];
@@ -144,7 +182,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 6. بدء جولة جديدة
+    // 8. بدء جولة جديدة
     function startNewRound(roomCode) {
         const room = rooms[roomCode];
         if (!room) return;
@@ -152,6 +190,7 @@ io.on('connection', (socket) => {
         room.deck = generateDeck();
         room.players.forEach(playerId => {
             room.hands[playerId] = room.deck.splice(0, 7);
+            room.unoPressed[playerId] = false;
         });
         room.topCard = room.deck.pop();
         room.turnIndex = Math.floor(Math.random() * room.players.length);
@@ -160,13 +199,12 @@ io.on('connection', (socket) => {
         io.to(roomCode).emit('newRoundStarted');
         updateGameState(roomCode);
 
-        // 🟢 تفعيل دور الذكاء الاصطناعي تلقائياً إذا جاء الدور عليه عند بدء الجولة
         if (room.isAi && room.players[room.turnIndex] === 'AI_PLAYER') {
             setTimeout(() => processAiTurn(roomCode), 1000);
         }
     }
 
-    // 7. تحديث حالة اللعبة
+    // 9. تحديث حالة اللعبة
     function updateGameState(roomCode) {
         const room = rooms[roomCode];
         if (!room) return;
@@ -185,12 +223,14 @@ io.on('connection', (socket) => {
                 myScore: room.scores[playerId] || 0,
                 opponentScore: room.scores[opponentId] || 0,
                 myName: room.playerNames[playerId] || 'أنا',
-                opponentName: room.playerNames[opponentId] || 'الخصم'
+                opponentName: room.playerNames[opponentId] || 'الخصم',
+                unoPressed: room.unoPressed[playerId] || false,
+                opponentUnoPressed: room.unoPressed[opponentId] || false
             });
         });
     }
 
-    // 8. لعب ورقة
+    // 10. لعب ورقة
     socket.on('playCard', ({ roomCode, cardIndex }) => {
         const room = rooms[roomCode];
         if (!room) return;
@@ -207,6 +247,13 @@ io.on('connection', (socket) => {
             hand.splice(cardIndex, 1);
             room.topCard = cardToPlay;
 
+            // إذا تبقى لدى اللاعب ورقة واحدة، يتم إعادة تعيين حالة الـ UNO ليضطر لضغط الزر
+            if (hand.length === 1) {
+                room.unoPressed[socket.id] = false;
+            } else if (hand.length > 1) {
+                room.unoPressed[socket.id] = false;
+            }
+
             if (hand.length === 0) {
                 handleRoundWin(roomCode, socket.id);
             } else {
@@ -222,7 +269,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 9. سحب ورقة
+    // 11. سحب ورقة
     socket.on('drawCard', (roomCode) => {
         const room = rooms[roomCode];
         if (!room) return;
@@ -236,6 +283,7 @@ io.on('connection', (socket) => {
 
         const drawnCard = room.deck.pop();
         room.hands[socket.id].push(drawnCard);
+        room.unoPressed[socket.id] = false;
 
         room.turnIndex = (room.turnIndex + 1) % room.players.length;
         updateGameState(roomCode);
@@ -245,7 +293,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 10. معالجة دور الكمبيوتر (AI)
+    // 12. معالجة دور الكمبيوتر (AI)
     function processAiTurn(roomCode) {
         const room = rooms[roomCode];
         if (!room || room.players[room.turnIndex] !== 'AI_PLAYER') return;
@@ -256,6 +304,10 @@ io.on('connection', (socket) => {
         if (validCardIndex !== -1) {
             const playedCard = aiHand.splice(validCardIndex, 1)[0];
             room.topCard = playedCard;
+
+            if (aiHand.length === 1) {
+                room.unoPressed['AI_PLAYER'] = true; // الكمبيوتر يضغط UNO تلقائياً لتجنب الثغرات
+            }
 
             if (aiHand.length === 0) {
                 handleRoundWin(roomCode, 'AI_PLAYER');
@@ -270,7 +322,7 @@ io.on('connection', (socket) => {
         updateGameState(roomCode);
     }
 
-    // 11. انتهاء الجولة وحساب النقاط
+    // 13. انتهاء الجولة وحساب النقاط
     function handleRoundWin(roomCode, winnerId) {
         const room = rooms[roomCode];
         const opponentId = room.players.find(id => id !== winnerId);
@@ -294,7 +346,6 @@ io.on('connection', (socket) => {
         }
     }
 
-    // 12. انقطاع الاتصال
     socket.on('disconnect', () => {
         console.log(`مستخدم انقطع: ${socket.id}`);
     });
