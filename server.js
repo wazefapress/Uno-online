@@ -137,30 +137,35 @@ io.on('connection', (socket) => {
     });
 
     // 6. زر التحدي (Challenge) وتطبيق العقوبة
-    socket.on('challengeUno', (roomCode) => {
-        const cleanCode = roomCode ? roomCode.toUpperCase().trim() : '';
-        const room = rooms[cleanCode];
-        if (!room) return;
+    // 6. زر التحدي (Challenge) وتطبيق العقوبة
+socket.on('challengeUno', (roomCode) => {
+    const cleanCode = roomCode ? roomCode.toUpperCase().trim() : '';
+    const room = rooms[cleanCode];
+    if (!room) return;
 
-        const opponentId = room.players.find(id => id !== socket.id);
-        if (!opponentId) return;
+    const opponentId = room.players.find(id => id !== socket.id);
+    if (!opponentId) return;
 
-        // التحقق مما إذا كان الخصم لديه ورقة واحدة ولم يضغط UNO
-        if (room.hands[opponentId] && room.hands[opponentId].length === 1 && !room.unoPressed[opponentId]) {
-            // عقوبة: سحب ورقتين للخصم
-            for (let i = 0; i < 2; i++) {
-                if (room.deck.length === 0) room.deck = generateDeck();
-                room.hands[opponentId].push(room.deck.pop());
-            }
-            // إعادة ضبط الـ unoPressed بعد العقوبة
-            room.unoPressed[opponentId] = false;
+    const oppHandLength = room.hands[opponentId] ? room.hands[opponentId].length : 0;
+    const oppUnoPressed = room.unoPressed[opponentId];
 
-            io.to(cleanCode).emit('generalToast', `⚠️ نجح التحدي! ${room.playerNames[opponentId]} نسي قول UNO وتمت معاقبته بسحب ورقتين! 🃏🃏`);
-            updateGameState(cleanCode);
-        } else {
-            socket.emit('errorMsg', 'التحدي غير صحيح! الخصم ضغط UNO أو ليس لديه ورقة واحدة.');
+    // التحقق مما إذا كان الخصم لديه ورقة واحدة ولم يضغط UNO
+    if (oppHandLength === 1 && !oppUnoPressed) {
+        // عقوبة: سحب ورقتين للخصم
+        for (let i = 0; i < 2; i++) {
+            if (room.deck.length === 0) room.deck = generateDeck();
+            room.hands[opponentId].push(room.deck.pop());
         }
-    });
+        // إعادة ضبط الـ unoPressed بعد العقوبة
+        room.unoPressed[opponentId] = false;
+
+        io.to(cleanCode).emit('generalToast', `⚠️ نجح التحدي! ${room.playerNames[opponentId]} نسي قول UNO وتمت معاقبته بسحب ورقتين! 🃏🃏`);
+        updateGameState(cleanCode);
+    } else {
+        // رسالة توضيحية دقيقة لمعرفة سبب فشل التحدي إن لم تتحقق الشروط
+        socket.emit('errorMsg', `التحدي غير صحيح! (أوراق الخصم: ${oppHandLength}، حالة UNO: ${oppUnoPressed ? 'مضغط' : 'غير ضاغط'})`);
+    }
+});
 
     // 7. إعادة الاتصال (Reconnect)
     socket.on('reconnectPlayer', ({ roomCode, oldId }) => {
