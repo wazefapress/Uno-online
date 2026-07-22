@@ -5,12 +5,7 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-    cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
-    }
-});
+const io = new Server(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -38,9 +33,7 @@ function generateRoomCode() {
 }
 
 io.on('connection', (socket) => {
-    console.log(`مستخدم متصل: ${socket.id}`);
 
-    // 1. إنشاء غرفة جديدة
     socket.on('createRoom', (data) => {
         const playerName = (data && data.playerName) ? data.playerName : 'لاعب 1';
         const roomCode = generateRoomCode();
@@ -50,7 +43,7 @@ io.on('connection', (socket) => {
             playerNames: { [socket.id]: playerName },
             hands: { [socket.id]: [] },
             scores: { [socket.id]: 0 },
-            unoPressed: { [socket.id]: false },
+            unoPressed: { [socket.id]: false }, // حالة التحدي
             deck: [],
             topCard: null,
             turnIndex: 0,
@@ -60,7 +53,6 @@ io.on('connection', (socket) => {
         socket.emit('roomCreated', roomCode);
     });
 
-    // 2. إنشاء غرفة AI
     socket.on('createAIRoom', (data) => {
         const playerName = (data && data.playerName) ? data.playerName : 'لاعب';
         const roomCode = generateRoomCode();
@@ -71,7 +63,7 @@ io.on('connection', (socket) => {
             playerNames: { [socket.id]: playerName, [aiId]: 'الكمبيوتر 🤖' },
             hands: { [socket.id]: [], [aiId]: [] },
             scores: { [socket.id]: 0, [aiId]: 0 },
-            unoPressed: { [socket.id]: false, [aiId]: true },
+            unoPressed: { [socket.id]: false, [aiId]: false }, // حالة التحدي
             deck: [],
             topCard: null,
             turnIndex: 0,
@@ -82,17 +74,10 @@ io.on('connection', (socket) => {
         startNewRound(roomCode);
     });
 
-    // 3. الانضمام إلى غرفة
     socket.on('joinRoom', ({ roomCode, playerName }) => {
-        const cleanCode = roomCode ? roomCode.toUpperCase().trim() : '';
-        const room = rooms[cleanCode];
-        if (!room) {
-            return socket.emit('errorMsg', 'هذه الغرفة غير موجودة!');
-        }
-        if (room.players.length >= 2) {
-            return socket.emit('errorMsg', 'الغرفة ممتلئة بالفعل!');
-        }
-        if (room.players.includes(socket.id)) return;
+        const room = rooms[roomCode];
+        if (!room) return socket.emit('errorMsg', 'هذه الغرفة غير موجودة!');
+        if (room.players.length >= 2) return socket.emit('errorMsg', 'الغرفة ممتلئة بالفعل!');
 
         const pName = playerName || 'لاعب 2';
         room.players.push(socket.id);
@@ -100,100 +85,39 @@ io.on('connection', (socket) => {
         room.hands[socket.id] = [];
         room.scores[socket.id] = 0;
         room.unoPressed[socket.id] = false;
-        socket.join(cleanCode);
-        
-        socket.emit('roomJoined', cleanCode);
-        startNewRound(cleanCode);
+        socket.join(roomCode);
+        socket.emit('roomJoined', roomCode);
+        startNewRound(roomCode);
     });
 
-    // 4. المحادثة الفورية (Chat)
-    socket.on('sendChatMessage', ({ roomCode, message }) => {
-        if (!roomCode || !message) return;
-
-        const cleanCode = roomCode.toString().toUpperCase().trim();
-        const room = rooms[cleanCode];
-        if (!room) return;
-
-        const senderName = (room.playerNames && room.playerNames[socket.id]) ? room.playerNames[socket.id] : 'لاعب';
-
-        io.to(cleanCode).emit('receiveChatMessage', {
-            senderId: socket.id,
-            senderName: senderName,
-            message: message.trim()
-        });
-    });
-
-    // 5. زر UNO
+    // أحداث تحدي UNO
     socket.on('pressUno', (roomCode) => {
-        const cleanCode = roomCode ? roomCode.toUpperCase().trim() : '';
-        const room = rooms[cleanCode];
-        if (!room) return;
-
-        if (room.hands[socket.id] && room.hands[socket.id].length <= 2) {
-            room.unoPressed[socket.id] = true;
-            io.to(cleanCode).emit('generalToast', `🗣️ ${room.playerNames[socket.id]} ضغط على زر UNO!`);
-            updateGameState(cleanCode);
-        }
-    });
-
-    // 6. زر التحدي (Challenge) وتطبيق العقوبة
-    // 6. زر التحدي (Challenge) وتطبيق العقوبة
-socket.on('challengeUno', (roomCode) => {
-    const cleanCode = roomCode ? roomCode.toUpperCase().trim() : '';
-    const room = rooms[cleanCode];
-    if (!room) return;
-
-    const opponentId = room.players.find(id => id !== socket.id);
-    if (!opponentId) return;
-
-    const oppHandLength = room.hands[opponentId] ? room.hands[opponentId].length : 0;
-    const oppUnoPressed = room.unoPressed[opponentId];
-
-    // التحقق مما إذا كان الخصم لديه ورقة واحدة ولم يضغط UNO
-    if (oppHandLength === 1 && !oppUnoPressed) {
-        // عقوبة: سحب ورقتين للخصم
-        for (let i = 0; i < 2; i++) {
-            if (room.deck.length === 0) room.deck = generateDeck();
-            room.hands[opponentId].push(room.deck.pop());
-        }
-        // إعادة ضبط الـ unoPressed بعد العقوبة
-        room.unoPressed[opponentId] = false;
-
-        io.to(cleanCode).emit('generalToast', `⚠️ نجح التحدي! ${room.playerNames[opponentId]} نسي قول UNO وتمت معاقبته بسحب ورقتين! 🃏🃏`);
-        updateGameState(cleanCode);
-    } else {
-        // رسالة توضيحية دقيقة لمعرفة سبب فشل التحدي إن لم تتحقق الشروط
-        socket.emit('errorMsg', `التحدي غير صحيح! (أوراق الخصم: ${oppHandLength}، حالة UNO: ${oppUnoPressed ? 'مضغط' : 'غير ضاغط'})`);
-    }
-});
-
-    // 7. إعادة الاتصال (Reconnect)
-    socket.on('reconnectPlayer', ({ roomCode, oldId }) => {
-        const cleanCode = roomCode ? roomCode.toUpperCase().trim() : '';
-        const room = rooms[cleanCode];
+        const room = rooms[roomCode];
         if (room) {
-            const index = room.players.indexOf(oldId);
-            if (index !== -1) {
-                room.players[index] = socket.id;
-                room.hands[socket.id] = room.hands[oldId];
-                delete room.hands[oldId];
-                room.scores[socket.id] = room.scores[oldId];
-                delete room.scores[oldId];
-                room.unoPressed[socket.id] = room.unoPressed[oldId] || false;
-                delete room.unoPressed[oldId];
-
-                if (room.playerNames) {
-                    room.playerNames[socket.id] = room.playerNames[oldId] || 'لاعب';
-                    delete room.playerNames[oldId];
-                }
-
-                socket.join(cleanCode);
-                updateGameState(cleanCode);
-            }
+            room.unoPressed[socket.id] = true;
+            io.to(roomCode).emit('generalToast', `📢 ${room.playerNames[socket.id]} قال UNO!`);
         }
     });
 
-    // 8. بدء جولة جديدة
+    socket.on('challengeUno', (roomCode) => {
+        const room = rooms[roomCode];
+        if (!room) return;
+        const opponentId = room.players.find(id => id !== socket.id);
+        if (!opponentId) return;
+
+        // إذا كان الخصم يمتلك ورقة واحدة ولم يضغط UNO
+        if (room.hands[opponentId].length === 1 && !room.unoPressed[opponentId]) {
+            if (room.deck.length < 2) room.deck = generateDeck();
+            room.hands[opponentId].push(room.deck.pop(), room.deck.pop());
+            room.unoPressed[opponentId] = true; // نؤمنه بعد السحب
+            
+            io.to(roomCode).emit('generalToast', `🚨 تحدي ناجح! ${room.playerNames[opponentId]} سحب ورقتين لأنه نسي قول UNO!`);
+            updateGameState(roomCode);
+        } else {
+            socket.emit('errorMsg', 'الخصم محمي (إما قال UNO أو يمتلك أكثر من ورقة).');
+        }
+    });
+
     function startNewRound(roomCode) {
         const room = rooms[roomCode];
         if (!room) return;
@@ -215,14 +139,12 @@ socket.on('challengeUno', (roomCode) => {
         }
     }
 
-    // 9. تحديث حالة اللعبة
     function updateGameState(roomCode) {
         const room = rooms[roomCode];
         if (!room) return;
 
         room.players.forEach(playerId => {
             if (playerId === 'AI_PLAYER') return;
-
             const opponentId = room.players.find(id => id !== playerId);
             const isMyTurn = room.players[room.turnIndex] === playerId;
 
@@ -235,18 +157,15 @@ socket.on('challengeUno', (roomCode) => {
                 opponentScore: room.scores[opponentId] || 0,
                 myName: room.playerNames[playerId] || 'أنا',
                 opponentName: room.playerNames[opponentId] || 'الخصم',
-                unoPressed: room.unoPressed[playerId] || false,
-                opponentUnoPressed: room.unoPressed[opponentId] || false
+                unoPressed: room.unoPressed[playerId],
+                opponentUnoPressed: room.unoPressed[opponentId]
             });
         });
     }
 
-    // 10. لعب ورقة
     socket.on('playCard', ({ roomCode, cardIndex }) => {
-        const cleanCode = roomCode ? roomCode.toUpperCase().trim() : '';
-        const room = rooms[cleanCode];
+        const room = rooms[roomCode];
         if (!room) return;
-
         const currentPlayerId = room.players[room.turnIndex];
         if (socket.id !== currentPlayerId) return;
 
@@ -259,54 +178,50 @@ socket.on('challengeUno', (roomCode) => {
             hand.splice(cardIndex, 1);
             room.topCard = cardToPlay;
 
-            // إذا تبقى لدى اللاعب ورقة واحدة، يتم تصفير حالة الunoPressed ليضطر للضغط
-            if (hand.length === 1) {
-                room.unoPressed[socket.id] = false;
-            } else {
-                room.unoPressed[socket.id] = false;
+            // إذا بقيت ورقة واحدة ولم يضغط اللاعب، سيقوم الذكاء الاصطناعي بتحديه
+            if (hand.length === 1 && room.isAi && !room.unoPressed[socket.id]) {
+                setTimeout(() => {
+                    const currentRoom = rooms[roomCode];
+                    if (currentRoom && currentRoom.hands[socket.id] && currentRoom.hands[socket.id].length === 1 && !currentRoom.unoPressed[socket.id]) {
+                        if (currentRoom.deck.length < 2) currentRoom.deck = generateDeck();
+                        currentRoom.hands[socket.id].push(currentRoom.deck.pop(), currentRoom.deck.pop());
+                        currentRoom.unoPressed[socket.id] = true;
+                        io.to(roomCode).emit('generalToast', `🚨 الكمبيوتر تحدى نسيانك لقول UNO! لقد سحبت ورقتين.`);
+                        updateGameState(roomCode);
+                    }
+                }, 2000); // إعطاء اللاعب مهلة 2 ثانية لتدارك الأمر
             }
 
             if (hand.length === 0) {
-                handleRoundWin(cleanCode, socket.id);
+                handleRoundWin(roomCode, socket.id);
             } else {
                 room.turnIndex = (room.turnIndex + 1) % room.players.length;
-                updateGameState(cleanCode);
-
+                updateGameState(roomCode);
                 if (room.isAi && room.players[room.turnIndex] === 'AI_PLAYER') {
-                    setTimeout(() => processAiTurn(cleanCode), 1000);
+                    setTimeout(() => processAiTurn(roomCode), 1000);
                 }
             }
         } else {
-            socket.emit('errorMsg', 'هذه الورقة لا تتطابق مع الورقة المركزية!');
+            socket.emit('errorMsg', 'هذه الورقة لا تتطابق!');
         }
     });
 
-    // 11. سحب ورقة
     socket.on('drawCard', (roomCode) => {
-        const cleanCode = roomCode ? roomCode.toUpperCase().trim() : '';
-        const room = rooms[cleanCode];
-        if (!room) return;
+        const room = rooms[roomCode];
+        if (!room || socket.id !== room.players[room.turnIndex]) return;
 
-        const currentPlayerId = room.players[room.turnIndex];
-        if (socket.id !== currentPlayerId) return;
-
-        if (room.deck.length === 0) {
-            room.deck = generateDeck();
-        }
-
-        const drawnCard = room.deck.pop();
-        room.hands[socket.id].push(drawnCard);
-        room.unoPressed[socket.id] = false;
-
+        if (room.deck.length === 0) room.deck = generateDeck();
+        room.hands[socket.id].push(room.deck.pop());
+        
+        room.unoPressed[socket.id] = false; // إعادة ضبط الحالة عند السحب
         room.turnIndex = (room.turnIndex + 1) % room.players.length;
-        updateGameState(cleanCode);
+        updateGameState(roomCode);
 
         if (room.isAi && room.players[room.turnIndex] === 'AI_PLAYER') {
-            setTimeout(() => processAiTurn(cleanCode), 1000);
+            setTimeout(() => processAiTurn(roomCode), 1000);
         }
     });
 
-    // 12. معالجة دور الكمبيوتر (AI)
     function processAiTurn(roomCode) {
         const room = rooms[roomCode];
         if (!room || room.players[room.turnIndex] !== 'AI_PLAYER') return;
@@ -315,40 +230,41 @@ socket.on('challengeUno', (roomCode) => {
         const validCardIndex = aiHand.findIndex(card => card.v === room.topCard.v || card.s === room.topCard.s);
 
         if (validCardIndex !== -1) {
-            const playedCard = aiHand.splice(validCardIndex, 1)[0];
-            room.topCard = playedCard;
+            room.topCard = aiHand.splice(validCardIndex, 1)[0];
 
+            // AI يضغط UNO مع تأخير متعمد ليمنح اللاعب فرصة لتحديه
             if (aiHand.length === 1) {
-                room.unoPressed['AI_PLAYER'] = true;
+                room.unoPressed['AI_PLAYER'] = false;
+                setTimeout(() => {
+                    const currentRoom = rooms[roomCode];
+                    if (currentRoom && currentRoom.hands['AI_PLAYER'] && currentRoom.hands['AI_PLAYER'].length === 1 && !currentRoom.unoPressed['AI_PLAYER']) {
+                        currentRoom.unoPressed['AI_PLAYER'] = true;
+                        io.to(roomCode).emit('generalToast', `🤖 الكمبيوتر قال UNO!`);
+                        updateGameState(roomCode);
+                    }
+                }, 2500); // اللاعب لديه 2.5 ثانية لمعاقبة الكمبيوتر
             }
 
-            if (aiHand.length === 0) {
-                handleRoundWin(roomCode, 'AI_PLAYER');
-                return;
-            }
+            if (aiHand.length === 0) return handleRoundWin(roomCode, 'AI_PLAYER');
         } else {
             if (room.deck.length === 0) room.deck = generateDeck();
             aiHand.push(room.deck.pop());
+            room.unoPressed['AI_PLAYER'] = false;
         }
 
         room.turnIndex = room.players.findIndex(id => id !== 'AI_PLAYER');
         updateGameState(roomCode);
     }
 
-    // 13. انتهاء الجولة وحساب النقاط
     function handleRoundWin(roomCode, winnerId) {
         const room = rooms[roomCode];
         const opponentId = room.players.find(id => id !== winnerId);
         
         let pointsWon = 0;
         if (room.hands[opponentId]) {
-            room.hands[opponentId].forEach(card => {
-                pointsWon += parseInt(card.v) || 5;
-            });
+            room.hands[opponentId].forEach(card => pointsWon += parseInt(card.v) || 5);
         }
-
         room.scores[winnerId] = (room.scores[winnerId] || 0) + pointsWon;
-
         io.to(roomCode).emit('roundOver', { winnerId, pointsWon });
 
         if (room.scores[winnerId] >= 100) {
@@ -358,13 +274,7 @@ socket.on('challengeUno', (roomCode) => {
             setTimeout(() => startNewRound(roomCode), 3000);
         }
     }
-
-    socket.on('disconnect', () => {
-        console.log(`مستخدم انقطع: ${socket.id}`);
-    });
 });
 
 const PORT = process.env.PORT || 10000;
-server.listen(PORT, () => {
-    console.log(`السيرفر يعمل بنجاح على المنفذ ${PORT}`);
-});
+server.listen(PORT, () => console.log(`السيرفر يعمل بنجاح على المنفذ ${PORT}`));
