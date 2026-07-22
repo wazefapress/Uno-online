@@ -53,8 +53,7 @@ io.on('connection', (socket) => {
             deck: [],
             topCard: null,
             turnIndex: 0,
-            isAi: false,
-            restartVotes: {} // إضافة سجل التصويتات
+            isAi: false
         };
         socket.join(roomCode);
         socket.emit('roomCreated', roomCode);
@@ -74,8 +73,7 @@ io.on('connection', (socket) => {
             deck: [],
             topCard: null,
             turnIndex: 0,
-            isAi: true,
-            restartVotes: {}
+            isAi: true
         };
         socket.join(roomCode);
         socket.emit('roomCreated', roomCode);
@@ -104,7 +102,7 @@ io.on('connection', (socket) => {
         startNewRound(roomCode);
     });
 
-    // 4. المحادثة الفورية
+    // 4. المحادثة الفورية (Chat)
     socket.on('sendChatMessage', ({ roomCode, message }) => {
         if (!roomCode || !message) return;
 
@@ -121,7 +119,7 @@ io.on('connection', (socket) => {
         });
     });
 
-    // 5. إعادة الاتصال
+    // 5. إعادة الاتصال (Reconnect)
     socket.on('reconnectPlayer', ({ roomCode, oldId }) => {
         const cleanCode = roomCode ? roomCode.toUpperCase().trim() : '';
         const room = rooms[cleanCode];
@@ -134,6 +132,7 @@ io.on('connection', (socket) => {
                 room.scores[socket.id] = room.scores[oldId];
                 delete room.scores[oldId];
 
+                // نقل اسم اللاعب للـ Socket ID الجديد
                 if (room.playerNames) {
                     room.playerNames[socket.id] = room.playerNames[oldId] || 'لاعب';
                     delete room.playerNames[oldId];
@@ -161,6 +160,7 @@ io.on('connection', (socket) => {
         io.to(roomCode).emit('newRoundStarted');
         updateGameState(roomCode);
 
+        // 🟢 تفعيل دور الذكاء الاصطناعي تلقائياً إذا جاء الدور عليه عند بدء الجولة
         if (room.isAi && room.players[room.turnIndex] === 'AI_PLAYER') {
             setTimeout(() => processAiTurn(roomCode), 1000);
         }
@@ -288,50 +288,13 @@ io.on('connection', (socket) => {
 
         if (room.scores[winnerId] >= 100) {
             io.to(roomCode).emit('gameOver', { winnerId });
-            // تم إزالة حذف الغرفة من هنا لكي تعمل أزرار التصويت!
+            delete rooms[roomCode];
         } else {
             setTimeout(() => startNewRound(roomCode), 3000);
         }
     }
 
-    // 12. نظام التصويت على إعادة اللعب
-    socket.on('playerVoteRestart', ({ roomCode, accept }) => {
-        const room = rooms[roomCode];
-        if (!room) return;
-
-        if (!accept) {
-            io.to(roomCode).emit('restartDeclined', 'تم إلغاء إعادة اللعب من قبل أحد الطرفين.');
-            delete rooms[roomCode]; // مسح الغرفة بعد الإلغاء
-            return;
-        }
-
-        room.restartVotes = room.restartVotes || {};
-        room.restartVotes[socket.id] = true;
-
-        if (room.isAi) {
-            room.restartVotes['AI_PLAYER'] = true; // الموافقة التلقائية للذكاء الاصطناعي
-        } else {
-            const playerName = room.playerNames[socket.id] || 'لاعب';
-            io.to(roomCode).emit('restartVoteUpdate', { message: `اللاعب ${playerName} وافق على إعادة اللعب. ⏳` });
-        }
-
-        // التحقق من موافقة جميع اللاعبين في الغرفة
-        const allVoted = room.players.every(id => room.restartVotes[id] === true);
-
-        if (allVoted) {
-            // إعادة تعيين النقاط والأيدي للتجهيز لجولات جديدة
-            room.players.forEach(id => {
-                room.scores[id] = 0;
-                room.hands[id] = [];
-            });
-            room.restartVotes = {}; // تصفير التصويتات
-
-            io.to(roomCode).emit('gameRestarted');
-            setTimeout(() => startNewRound(roomCode), 1000); // بدء جولة جديدة كلياً
-        }
-    });
-
-    // 13. انقطاع الاتصال
+    // 12. انقطاع الاتصال
     socket.on('disconnect', () => {
         console.log(`مستخدم انقطع: ${socket.id}`);
     });
