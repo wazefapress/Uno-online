@@ -6,14 +6,10 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-    cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
-    }
+    cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
-
 const rooms = {};
 
 function generateDeck() {
@@ -40,58 +36,34 @@ function generateRoomCode() {
 io.on('connection', (socket) => {
     console.log(`مستخدم متصل: ${socket.id}`);
 
-    // 1. إنشاء غرفة جديدة
     socket.on('createRoom', (data) => {
         const playerName = (data && data.playerName) ? data.playerName : 'لاعب 1';
         const roomCode = generateRoomCode();
         rooms[roomCode] = {
-            code: roomCode,
-            players: [socket.id],
+            code: roomCode, 
+            players: [socket.id], 
             playerNames: { [socket.id]: playerName },
-            hands: { [socket.id]: [] },
+            hands: { [socket.id]: [] }, 
             scores: { [socket.id]: 0 },
-            deck: [],
-            topCard: null,
-            turnIndex: 0,
+            deck: [], 
+            topCard: null, 
+            turnIndex: 0, 
             isAi: false
         };
         socket.join(roomCode);
         socket.emit('roomCreated', roomCode);
+        io.to(roomCode).emit('lobbyUpdated', {
+            players: [{ id: socket.id, name: playerName }], hostId: socket.id
+        });
     });
 
-    // 2. إنشاء غرفة AI
-    socket.on('createAIRoom', (data) => {
-        const playerName = (data && data.playerName) ? data.playerName : 'لاعب';
-        const roomCode = generateRoomCode();
-        const aiId = 'AI_PLAYER';
-        rooms[roomCode] = {
-            code: roomCode,
-            players: [socket.id, aiId],
-            playerNames: { [socket.id]: playerName, [aiId]: 'الكمبيوتر 🤖' },
-            hands: { [socket.id]: [], [aiId]: [] },
-            scores: { [socket.id]: 0, [aiId]: 0 },
-            deck: [],
-            topCard: null,
-            turnIndex: 0,
-            isAi: true
-        };
-        socket.join(roomCode);
-        socket.emit('roomCreated', roomCode);
-        startNewRound(roomCode);
-    });
-
-    // 3. الانضمام إلى غرفة
     socket.on('joinRoom', ({ roomCode, playerName }) => {
         const room = rooms[roomCode];
-        if (!room) {
-            return socket.emit('errorMsg', 'هذه الغرفة غير موجودة!');
-        }
-        if (room.players.length >= 2) {
-            return socket.emit('errorMsg', 'الغرفة ممتلئة بالفعل!');
-        }
+        if (!room) return socket.emit('errorMsg', 'هذه الغرفة غير موجودة!');
+        if (room.players.length >= 4) return socket.emit('errorMsg', 'الغرفة ممتلئة!');
         if (room.players.includes(socket.id)) return;
 
-        const pName = playerName || 'لاعب 2';
+        const pName = playerName || `لاعب ${room.players.length + 1}`;
         room.players.push(socket.id);
         room.playerNames[socket.id] = pName;
         room.hands[socket.id] = [];
@@ -99,56 +71,31 @@ io.on('connection', (socket) => {
         socket.join(roomCode);
         
         socket.emit('roomJoined', roomCode);
-        startNewRound(roomCode);
-    });
-
-    // 4. المحادثة الفورية (Chat)
-    socket.on('sendChatMessage', ({ roomCode, message }) => {
-        if (!roomCode || !message) return;
-
-        const cleanCode = roomCode.toString().toUpperCase().trim();
-        const room = rooms[cleanCode];
-        if (!room) return;
-
-        const senderName = (room.playerNames && room.playerNames[socket.id]) ? room.playerNames[socket.id] : 'لاعب';
-
-        io.to(cleanCode).emit('receiveChatMessage', {
-            senderId: socket.id,
-            senderName: senderName,
-            message: message.trim()
+        io.to(roomCode).emit('lobbyUpdated', {
+            players: room.players.map(id => ({ id, name: room.playerNames[id] })),
+            hostId: room.players[0]
         });
     });
 
-    // 5. إعادة الاتصال (Reconnect)
-    socket.on('reconnectPlayer', ({ roomCode, oldId }) => {
-        const cleanCode = roomCode ? roomCode.toUpperCase().trim() : '';
-        const room = rooms[cleanCode];
-        if (room) {
-            const index = room.players.indexOf(oldId);
-            if (index !== -1) {
-                room.players[index] = socket.id;
-                room.hands[socket.id] = room.hands[oldId];
-                delete room.hands[oldId];
-                room.scores[socket.id] = room.scores[oldId];
-                delete room.scores[oldId];
-
-                // نقل اسم اللاعب للـ Socket ID الجديد
-                if (room.playerNames) {
-                    room.playerNames[socket.id] = room.playerNames[oldId] || 'لاعب';
-                    delete room.playerNames[oldId];
-                }
-
-                socket.join(cleanCode);
-                updateGameState(cleanCode);
-            }
+    socket.on('hostStartGame', (roomCode) => {
+        const room = rooms[roomCode];
+        if (room && room.players[0] === socket.id && room.players.length >= 2) {
+            startNewRound(roomCode);
         }
     });
 
-    // 6. بدء جولة جديدة
+    socket.on('sendChatMessage', ({ roomCode, message }) => {
+        if (!roomCode || !message) return;
+        const cleanCode = roomCode.toString().toUpperCase().trim();
+        const room = rooms[cleanCode];
+        if (!room) return;
+        const senderName = (room.playerNames && room.playerNames[socket.id]) ? room.playerNames[socket.id] : 'لاعب';
+        io.to(cleanCode).emit('receiveChatMessage', { senderId: socket.id, senderName: senderName, message: message.trim() });
+    });
+
     function startNewRound(roomCode) {
         const room = rooms[roomCode];
         if (!room) return;
-
         room.deck = generateDeck();
         room.players.forEach(playerId => {
             room.hands[playerId] = room.deck.splice(0, 7);
@@ -159,131 +106,94 @@ io.on('connection', (socket) => {
         io.to(roomCode).emit('startGame', { isAi: room.isAi });
         io.to(roomCode).emit('newRoundStarted');
         updateGameState(roomCode);
-
-        // 🟢 تفعيل دور الذكاء الاصطناعي تلقائياً إذا جاء الدور عليه عند بدء الجولة
-        if (room.isAi && room.players[room.turnIndex] === 'AI_PLAYER') {
-            setTimeout(() => processAiTurn(roomCode), 1000);
-        }
     }
 
-    // 7. تحديث حالة اللعبة
     function updateGameState(roomCode) {
         const room = rooms[roomCode];
         if (!room) return;
 
         room.players.forEach(playerId => {
-            if (playerId === 'AI_PLAYER') return;
+            const myIndex = room.players.indexOf(playerId);
+            const total = room.players.length;
+            const opponents = [];
 
-            const opponentId = room.players.find(id => id !== playerId);
-            const isMyTurn = room.players[room.turnIndex] === playerId;
+            // 🚀 توزيع دقيق ومطابق لمعرفات الواجهة (top, left, right)
+            if (total === 2) {
+                const oppId = room.players[(myIndex + 1) % total];
+                opponents.push({ pos: 'top', id: oppId, name: room.playerNames[oppId], count: room.hands[oppId].length, score: room.scores[oppId] });
+            } else if (total === 3) {
+                const opp1Id = room.players[(myIndex + 1) % total];
+                const opp2Id = room.players[(myIndex + 2) % total];
+                opponents.push({ pos: 'left', id: opp1Id, name: room.playerNames[opp1Id], count: room.hands[opp1Id].length, score: room.scores[opp1Id] });
+                opponents.push({ pos: 'right', id: opp2Id, name: room.playerNames[opp2Id], count: room.hands[opp2Id].length, score: room.scores[opp2Id] });
+            } else if (total === 4) {
+                const opp1Id = room.players[(myIndex + 1) % total];
+                const opp2Id = room.players[(myIndex + 2) % total];
+                const opp3Id = room.players[(myIndex + 3) % total];
+                opponents.push({ pos: 'left', id: opp1Id, name: room.playerNames[opp1Id], count: room.hands[opp1Id].length, score: room.scores[opp1Id] });
+                opponents.push({ pos: 'top', id: opp2Id, name: room.playerNames[opp2Id], count: room.hands[opp2Id].length, score: room.scores[opp2Id] });
+                opponents.push({ pos: 'right', id: opp3Id, name: room.playerNames[opp3Id], count: room.hands[opp3Id].length, score: room.scores[opp3Id] });
+            }
 
             io.to(playerId).emit('updateGameState', {
                 myHand: room.hands[playerId],
-                opponentCardCount: room.hands[opponentId] ? room.hands[opponentId].length : 0,
+                opponents: opponents,
                 topCard: room.topCard,
-                isMyTurn: isMyTurn,
+                isMyTurn: room.players[room.turnIndex] === playerId,
                 myScore: room.scores[playerId] || 0,
-                opponentScore: room.scores[opponentId] || 0,
                 myName: room.playerNames[playerId] || 'أنا',
-                opponentName: room.playerNames[opponentId] || 'الخصم'
+                currentTurnId: room.players[room.turnIndex]
             });
         });
     }
 
-    // 8. لعب ورقة
     socket.on('playCard', ({ roomCode, cardIndex }) => {
         const room = rooms[roomCode];
         if (!room) return;
-
         const currentPlayerId = room.players[room.turnIndex];
         if (socket.id !== currentPlayerId) return;
-
         const hand = room.hands[socket.id];
         if (!hand || cardIndex < 0 || cardIndex >= hand.length) return;
-
+        
         const cardToPlay = hand[cardIndex];
-
         if (cardToPlay.v === room.topCard.v || cardToPlay.s === room.topCard.s) {
             hand.splice(cardIndex, 1);
             room.topCard = cardToPlay;
-
             if (hand.length === 0) {
                 handleRoundWin(roomCode, socket.id);
             } else {
                 room.turnIndex = (room.turnIndex + 1) % room.players.length;
                 updateGameState(roomCode);
-
-                if (room.isAi && room.players[room.turnIndex] === 'AI_PLAYER') {
-                    setTimeout(() => processAiTurn(roomCode), 1000);
-                }
             }
         } else {
             socket.emit('errorMsg', 'هذه الورقة لا تتطابق مع الورقة المركزية!');
         }
     });
 
-    // 9. سحب ورقة
     socket.on('drawCard', (roomCode) => {
         const room = rooms[roomCode];
         if (!room) return;
-
-        const currentPlayerId = room.players[room.turnIndex];
-        if (socket.id !== currentPlayerId) return;
-
-        if (room.deck.length === 0) {
-            room.deck = generateDeck();
-        }
-
-        const drawnCard = room.deck.pop();
-        room.hands[socket.id].push(drawnCard);
-
+        if (socket.id !== room.players[room.turnIndex]) return;
+        
+        if (room.deck.length === 0) room.deck = generateDeck();
+        room.hands[socket.id].push(room.deck.pop());
         room.turnIndex = (room.turnIndex + 1) % room.players.length;
         updateGameState(roomCode);
-
-        if (room.isAi && room.players[room.turnIndex] === 'AI_PLAYER') {
-            setTimeout(() => processAiTurn(roomCode), 1000);
-        }
     });
 
-    // 10. معالجة دور الكمبيوتر (AI)
-    function processAiTurn(roomCode) {
-        const room = rooms[roomCode];
-        if (!room || room.players[room.turnIndex] !== 'AI_PLAYER') return;
-
-        const aiHand = room.hands['AI_PLAYER'];
-        const validCardIndex = aiHand.findIndex(card => card.v === room.topCard.v || card.s === room.topCard.s);
-
-        if (validCardIndex !== -1) {
-            const playedCard = aiHand.splice(validCardIndex, 1)[0];
-            room.topCard = playedCard;
-
-            if (aiHand.length === 0) {
-                handleRoundWin(roomCode, 'AI_PLAYER');
-                return;
-            }
-        } else {
-            if (room.deck.length === 0) room.deck = generateDeck();
-            aiHand.push(room.deck.pop());
-        }
-
-        room.turnIndex = room.players.findIndex(id => id !== 'AI_PLAYER');
-        updateGameState(roomCode);
-    }
-
-    // 11. انتهاء الجولة وحساب النقاط
     function handleRoundWin(roomCode, winnerId) {
         const room = rooms[roomCode];
-        const opponentId = room.players.find(id => id !== winnerId);
-        
         let pointsWon = 0;
-        if (room.hands[opponentId]) {
-            room.hands[opponentId].forEach(card => {
-                pointsWon += parseInt(card.v) || 5;
-            });
-        }
+        
+        room.players.forEach(playerId => {
+            if (playerId !== winnerId && room.hands[playerId]) {
+                room.hands[playerId].forEach(card => {
+                    pointsWon += parseInt(card.v) || 5;
+                });
+            }
+        });
 
         room.scores[winnerId] = (room.scores[winnerId] || 0) + pointsWon;
-
         io.to(roomCode).emit('roundOver', { winnerId, pointsWon });
 
         if (room.scores[winnerId] >= 100) {
@@ -294,13 +204,10 @@ io.on('connection', (socket) => {
         }
     }
 
-    // 12. انقطاع الاتصال
     socket.on('disconnect', () => {
         console.log(`مستخدم انقطع: ${socket.id}`);
     });
 });
 
 const PORT = process.env.PORT || 10000;
-server.listen(PORT, () => {
-    console.log(`السيرفر يعمل بنجاح على المنفذ ${PORT}`);
-});
+server.listen(PORT, () => { console.log(`السيرفر يعمل بنجاح على المنفذ ${PORT}`); });
