@@ -57,6 +57,27 @@ io.on('connection', (socket) => {
         });
     });
 
+    // 🤖 إضافة حدث إنشاء غرفة اللعب ضد الكمبيوتر
+    socket.on('createAIRoom', (data) => {
+        const playerName = (data && data.playerName) ? data.playerName : 'لاعب';
+        const roomCode = generateRoomCode();
+        const aiId = 'AI_BOT';
+        rooms[roomCode] = {
+            code: roomCode,
+            players: [socket.id, aiId],
+            playerNames: { [socket.id]: playerName, [aiId]: 'الكمبيوتر 🤖' },
+            hands: { [socket.id]: [], [aiId]: [] },
+            scores: { [socket.id]: 0, [aiId]: 0 },
+            deck: [],
+            topCard: null,
+            turnIndex: 0,
+            isAi: true
+        };
+        socket.join(roomCode);
+        socket.emit('roomCreated', roomCode);
+        startNewRound(roomCode);
+    });
+
     socket.on('joinRoom', ({ roomCode, playerName }) => {
         const room = rooms[roomCode];
         if (!room) return socket.emit('errorMsg', 'هذه الغرفة غير موجودة!');
@@ -106,6 +127,10 @@ io.on('connection', (socket) => {
         io.to(roomCode).emit('startGame', { isAi: room.isAi });
         io.to(roomCode).emit('newRoundStarted');
         updateGameState(roomCode);
+
+        if (room.isAi) {
+            checkAiTurn(roomCode);
+        }
     }
 
     function updateGameState(roomCode) {
@@ -113,11 +138,12 @@ io.on('connection', (socket) => {
         if (!room) return;
 
         room.players.forEach(playerId => {
+            if (playerId === 'AI_BOT') return;
             const myIndex = room.players.indexOf(playerId);
             const total = room.players.length;
             const opponents = [];
 
-            // 🚀 توزيع دقيق ومطابق لمعرفات الواجهة (top, left, right)
+            // 🚀 توزيع دقيق لمعرفات الخصوم (top, left, right)
             if (total === 2) {
                 const oppId = room.players[(myIndex + 1) % total];
                 opponents.push({ pos: 'top', id: oppId, name: room.playerNames[oppId], count: room.hands[oppId].length, score: room.scores[oppId] });
@@ -147,6 +173,36 @@ io.on('connection', (socket) => {
         });
     }
 
+    // 🤖 محاكاة دور الذكاء الاصطناعي
+    function checkAiTurn(roomCode) {
+        const room = rooms[roomCode];
+        if (!room || !room.isAi) return;
+        const currentPlayerId = room.players[room.turnIndex];
+        
+        if (currentPlayerId === 'AI_BOT') {
+            setTimeout(() => {
+                const aiHand = room.hands['AI_BOT'];
+                const validCardIndex = aiHand.findIndex(card => card.v === room.topCard.v || card.s === room.topCard.s);
+                
+                if (validCardIndex !== -1) {
+                    const playedCard = aiHand.splice(validCardIndex, 1)[0];
+                    room.topCard = playedCard;
+                    if (aiHand.length === 0) {
+                        handleRoundWin(roomCode, 'AI_BOT');
+                        return;
+                    }
+                } else {
+                    if (room.deck.length === 0) room.deck = generateDeck();
+                    aiHand.push(room.deck.pop());
+                }
+                
+                room.turnIndex = (room.turnIndex + 1) % room.players.length;
+                updateGameState(roomCode);
+                checkAiTurn(roomCode);
+            }, 1200);
+        }
+    }
+
     socket.on('playCard', ({ roomCode, cardIndex }) => {
         const room = rooms[roomCode];
         if (!room) return;
@@ -164,6 +220,9 @@ io.on('connection', (socket) => {
             } else {
                 room.turnIndex = (room.turnIndex + 1) % room.players.length;
                 updateGameState(roomCode);
+                if (room.isAi) {
+                    checkAiTurn(roomCode);
+                }
             }
         } else {
             socket.emit('errorMsg', 'هذه الورقة لا تتطابق مع الورقة المركزية!');
@@ -179,6 +238,10 @@ io.on('connection', (socket) => {
         room.hands[socket.id].push(room.deck.pop());
         room.turnIndex = (room.turnIndex + 1) % room.players.length;
         updateGameState(roomCode);
+
+        if (room.isAi) {
+            checkAiTurn(roomCode);
+        }
     });
 
     function handleRoundWin(roomCode, winnerId) {
