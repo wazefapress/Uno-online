@@ -4,6 +4,7 @@ Backend &  Frontend Hosting
 
 
 https://uno-online.haythamzeidan.workers.dev/
+
 بناءً على الأكواد التي استعرضناها وعملنا على تطويرها في مشروع لعبة **UNO Online**، اللعبة مبنية بالكامل باستخدام هيكلية (Full-Stack) تعتمد على تقنيات الويب الحديثة والاتصال في الوقت الفعلي.
 
 إليك تفصيل التقنيات والبرمجيات والمكتبات المستخدمة في بناء هذا المشروع:
@@ -38,5 +39,6 @@ https://uno-online.haythamzeidan.workers.dev/
 * **Nodemon:** (أداة تطوير مساعدة) تُستخدم لإعادة تشغيل خادم Node.js تلقائياً بمجرد حفظ أي تعديل في الملفات، مما يسرع عملية البرمجة.
 
 هذه التركيبة (المعروفة بمرونتها وسرعتها) تُعد خياراً ممتازاً ومثالياً جداً لبناء ألعاب متصفح تفاعلية وسريعة الاستجابة (Multiplayer Browser Games) وتتحمل الاتصال المباشر دون تأخير.
+نسخة الموبايل: React Native 
 <img width="720" height="1265" alt="Screenshot_٢٠٢٦٠٧١٩_١٤٢٤٣٤_Samsung Internet" src="https://github.com/user-attachments/assets/68ef1871-fc0f-4cb8-8ab5-820c496e980b" />
 <img width="720" height="1280" alt="Screenshot_٢٠٢٦٠٧١٩_١٤٢٥١٢_Samsung Internet" src="https://github.com/user-attachments/assets/bde130a2-17d7-4920-9319-efcec0e0393a" />
