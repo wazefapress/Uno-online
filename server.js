@@ -32,7 +32,7 @@ function generateRoomCode() {
 io.on('connection', (socket) => {
     console.log(`مستخدم متصل: ${socket.id}`);
 
-    // إنشاء غرفة أونلاين مع دعم سقف النقاط الاختياري
+    // إنشاء غرفة أونلاين مع دعم سقف النقاط المختار
     socket.on('createRoom', (data) => {
         const playerName = (data && data.playerName) ? data.playerName : 'لاعب';
         const targetScore = (data && data.targetScore) ? parseInt(data.targetScore) : 100;
@@ -48,7 +48,7 @@ io.on('connection', (socket) => {
         io.to(roomCode).emit('lobbyUpdated', { players: [{ id: socket.id, name: playerName }], hostId: socket.id });
     });
 
-    // 🤖 إنشاء غرفة اللعب ضد الكمبيوتر (تدعم من 2 لـ 4 لاعبين)
+    // 🤖 إنشاء غرفة اللعب ضد الكمبيوتر مع سقف النقاط
     socket.on('createAIRoom', (data) => {
         const playerName = (data && data.playerName) ? data.playerName : 'لاعب';
         const totalPlayers = (data && data.totalPlayers) ? parseInt(data.totalPlayers) : 2;
@@ -106,25 +106,17 @@ io.on('connection', (socket) => {
         }
     });
 
-    // معالجة إعادة اللعب وتصفير النقاط
+    // 🌟 معالجة طلب إعادة اللعب (تصفير النقاط وبدء جولة جديدة)
     socket.on('requestRematch', ({ roomCode }) => {
         const room = rooms[roomCode];
         if (!room) return;
+
+        // تصفير النقاط لجميع اللاعبين
         room.players.forEach(playerId => {
             room.scores[playerId] = 0;
         });
-        startNewRound(roomCode);
-    });
 
-    // استقبال رسائل الشات المتوافقة مع العميل
-    socket.on('sendChatMessage', ({ roomCode, message }) => {
-        const room = rooms[roomCode];
-        if (!room) return;
-        io.to(roomCode).emit('receiveChatMessage', {
-            senderId: socket.id,
-            senderName: room.playerNames[socket.id] || 'لاعب',
-            message: message
-        });
+        startNewRound(roomCode);
     });
 
     function startNewRound(roomCode) {
@@ -180,7 +172,7 @@ io.on('connection', (socket) => {
                 myScore: room.scores[playerId] || 0,
                 myName: room.playerNames[playerId] || 'أنا',
                 currentTurnId: room.players[room.turnIndex],
-                targetScore: room.targetScore || 100
+                targetScore: room.targetScore || 100 // 🌟 إرسال سقف النقاط للعميل
             });
         });
     }
@@ -291,9 +283,11 @@ io.on('connection', (socket) => {
         room.scores[winnerId] = (room.scores[winnerId] || 0) + pointsWon;
         io.to(roomCode).emit('roundOver', { winnerId, pointsWon });
 
+        // 🌟 الاعتماد على سقف النقاط المختار بدلاً من الرقم الثابت 100
         const target = room.targetScore || 100;
         if (room.scores[winnerId] >= target) {
             io.to(roomCode).emit('gameOver', { winnerId });
+            // لا نحذف الغرفة تماماً لكي يسمح النظام بإعادة اللعب عند الضغط على زر Rematch
         } else {
             setTimeout(() => startNewRound(roomCode), 10000);
         }
