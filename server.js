@@ -305,4 +305,6 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 10000;
-server.listen(PORT, () => { console.log(`السيرفر يعمل بنجاح على المنفذ ${PORT}`); });
+server.listen(PORT, '0.0.0.0', () => { 
+    console.log(`السيرفر يعمل بنجاح على المنفذ ${PORT}`); 
+});
