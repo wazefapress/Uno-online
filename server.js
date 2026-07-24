@@ -32,16 +32,14 @@ function generateRoomCode() {
 io.on('connection', (socket) => {
     console.log(`مستخدم متصل: ${socket.id}`);
 
-    // إنشاء غرفة أونلاين مع دعم سقف النقاط الاختياري
+    // إنشاء غرفة أونلاين
     socket.on('createRoom', (data) => {
         const playerName = (data && data.playerName) ? data.playerName : 'لاعب';
-        const targetScore = (data && data.targetScore) ? parseInt(data.targetScore) : 100;
         const roomCode = generateRoomCode();
-        
         rooms[roomCode] = {
             code: roomCode, players: [socket.id], playerNames: { [socket.id]: playerName },
             hands: { [socket.id]: [] }, scores: { [socket.id]: 0 },
-            deck: [], topCard: null, turnIndex: 0, isAi: false, targetScore: targetScore
+            deck: [], topCard: null, turnIndex: 0, isAi: false
         };
         socket.join(roomCode);
         socket.emit('roomCreated', roomCode);
@@ -52,7 +50,6 @@ io.on('connection', (socket) => {
     socket.on('createAIRoom', (data) => {
         const playerName = (data && data.playerName) ? data.playerName : 'لاعب';
         const totalPlayers = (data && data.totalPlayers) ? parseInt(data.totalPlayers) : 2;
-        const targetScore = (data && data.targetScore) ? parseInt(data.targetScore) : 100;
         const roomCode = generateRoomCode();
         
         const players = [socket.id];
@@ -71,7 +68,7 @@ io.on('connection', (socket) => {
         rooms[roomCode] = {
             code: roomCode, players: players, playerNames: playerNames,
             hands: hands, scores: scores, deck: [], topCard: null,
-            turnIndex: 0, isAi: true, isAiProcessing: false, targetScore: targetScore
+            turnIndex: 0, isAi: true, isAiProcessing: false
         };
 
         socket.join(roomCode);
@@ -106,27 +103,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // معالجة إعادة اللعب وتصفير النقاط
-    socket.on('requestRematch', ({ roomCode }) => {
-        const room = rooms[roomCode];
-        if (!room) return;
-        room.players.forEach(playerId => {
-            room.scores[playerId] = 0;
-        });
-        startNewRound(roomCode);
-    });
-
-    // استقبال رسائل الشات المتوافقة مع العميل
-    socket.on('sendChatMessage', ({ roomCode, message }) => {
-        const room = rooms[roomCode];
-        if (!room) return;
-        io.to(roomCode).emit('receiveChatMessage', {
-            senderId: socket.id,
-            senderName: room.playerNames[socket.id] || 'لاعب',
-            message: message
-        });
-    });
-
     function startNewRound(roomCode) {
         const room = rooms[roomCode];
         if (!room) return;
@@ -149,6 +125,7 @@ io.on('connection', (socket) => {
         if (!room) return;
 
         room.players.forEach(playerId => {
+            // 🚀 الإصلاح الجذري: منع السيرفر من معالجة بيانات للروبوتات
             if (playerId.startsWith('AI_BOT')) return; 
 
             const myIndex = room.players.indexOf(playerId);
@@ -179,12 +156,12 @@ io.on('connection', (socket) => {
                 isMyTurn: room.players[room.turnIndex] === playerId,
                 myScore: room.scores[playerId] || 0,
                 myName: room.playerNames[playerId] || 'أنا',
-                currentTurnId: room.players[room.turnIndex],
-                targetScore: room.targetScore || 100
+                currentTurnId: room.players[room.turnIndex]
             });
         });
     }
 
+    // 🤖 دالة الذكاء الاصطناعي مع منع التداخل
     function checkAiTurn(roomCode) {
         const room = rooms[roomCode];
         if (!room || !room.isAi) return;
@@ -291,9 +268,9 @@ io.on('connection', (socket) => {
         room.scores[winnerId] = (room.scores[winnerId] || 0) + pointsWon;
         io.to(roomCode).emit('roundOver', { winnerId, pointsWon });
 
-        const target = room.targetScore || 100;
-        if (room.scores[winnerId] >= target) {
+        if (room.scores[winnerId] >= 100) {
             io.to(roomCode).emit('gameOver', { winnerId });
+            delete rooms[roomCode];
         } else {
             setTimeout(() => startNewRound(roomCode), 10000);
         }
@@ -305,6 +282,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 10000;
-server.listen(PORT, '0.0.0.0', () => { 
-    console.log(`السيرفر يعمل بنجاح على المنفذ ${PORT}`); 
-});
+server.listen(PORT, () => { console.log(`السيرفر يعمل بنجاح على المنفذ ${PORT}`); });
