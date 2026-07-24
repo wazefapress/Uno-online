@@ -10,11 +10,6 @@ const io = new Server(server, { cors: { origin: "*", methods: ["GET", "POST"] } 
 app.use(express.static(path.join(__dirname, 'public')));
 const rooms = {};
 
-// ==========================================
-// 🎴 مسار لعبة أونو (Uno Namespace)
-// ==========================================
-const unoIo = io.of('/uno');
-
 function generateDeck() {
     const suits = ['♥', '♠', '♦', '♣'];
     let deck = [];
@@ -34,8 +29,8 @@ function generateRoomCode() {
     return rooms[code] ? generateRoomCode() : code;
 }
 
-unoIo.on('connection', (socket) => {
-    console.log(`مستخدم متصل بلعبة أونو: ${socket.id}`);
+io.on('connection', (socket) => {
+    console.log(`مستخدم متصل: ${socket.id}`);
 
     // إنشاء غرفة أونلاين
     socket.on('createRoom', (data) => {
@@ -48,10 +43,10 @@ unoIo.on('connection', (socket) => {
         };
         socket.join(roomCode);
         socket.emit('roomCreated', roomCode);
-        unoIo.to(roomCode).emit('lobbyUpdated', { players: [{ id: socket.id, name: playerName }], hostId: socket.id });
+        io.to(roomCode).emit('lobbyUpdated', { players: [{ id: socket.id, name: playerName }], hostId: socket.id });
     });
 
-    // إنشاء غرفة اللعب ضد الكمبيوتر
+    // 🤖 إنشاء غرفة اللعب ضد الكمبيوتر (تدعم من 2 لـ 4 لاعبين)
     socket.on('createAIRoom', (data) => {
         const playerName = (data && data.playerName) ? data.playerName : 'لاعب';
         const totalPlayers = (data && data.totalPlayers) ? parseInt(data.totalPlayers) : 2;
@@ -95,7 +90,7 @@ unoIo.on('connection', (socket) => {
         socket.join(roomCode);
         
         socket.emit('roomJoined', roomCode);
-        unoIo.to(roomCode).emit('lobbyUpdated', {
+        io.to(roomCode).emit('lobbyUpdated', {
             players: room.players.map(id => ({ id, name: room.playerNames[id] })),
             hostId: room.players[0]
         });
@@ -108,24 +103,6 @@ unoIo.on('connection', (socket) => {
         }
     });
 
-    // 🔄 حدث إعادة اللعب في نفس الغرفة
-    socket.on('restartGame', (roomCode) => {
-        const room = rooms[roomCode];
-        if (!room) return;
-        
-        // التأكد أن من طلب الإعادة هو مدير الغرفة
-        if (socket.id !== room.players[0]) return;
-
-        // تصفير النقاط والأيدي لجميع اللاعبين
-        room.players.forEach(playerId => {
-            room.scores[playerId] = 0;
-            room.hands[playerId] = [];
-        });
-        
-        room.isAiProcessing = false;
-        startNewRound(roomCode);
-    });
-
     function startNewRound(roomCode) {
         const room = rooms[roomCode];
         if (!room) return;
@@ -136,8 +113,8 @@ unoIo.on('connection', (socket) => {
         room.topCard = room.deck.pop();
         room.turnIndex = Math.floor(Math.random() * room.players.length);
 
-        unoIo.to(roomCode).emit('startGame', { isAi: room.isAi });
-        unoIo.to(roomCode).emit('newRoundStarted');
+        io.to(roomCode).emit('startGame', { isAi: room.isAi });
+        io.to(roomCode).emit('newRoundStarted');
         updateGameState(roomCode);
 
         if (room.isAi) { checkAiTurn(roomCode); }
@@ -148,6 +125,7 @@ unoIo.on('connection', (socket) => {
         if (!room) return;
 
         room.players.forEach(playerId => {
+            // 🚀 الإصلاح الجذري: منع السيرفر من معالجة بيانات للروبوتات
             if (playerId.startsWith('AI_BOT')) return; 
 
             const myIndex = room.players.indexOf(playerId);
@@ -171,7 +149,7 @@ unoIo.on('connection', (socket) => {
                 opponents.push({ pos: 'right', id: opp3Id, name: room.playerNames[opp3Id], count: room.hands[opp3Id].length, score: room.scores[opp3Id] });
             }
 
-            unoIo.to(playerId).emit('updateGameState', {
+            io.to(playerId).emit('updateGameState', {
                 myHand: room.hands[playerId],
                 opponents: opponents,
                 topCard: room.topCard,
@@ -183,6 +161,7 @@ unoIo.on('connection', (socket) => {
         });
     }
 
+    // 🤖 دالة الذكاء الاصطناعي مع منع التداخل
     function checkAiTurn(roomCode) {
         const room = rooms[roomCode];
         if (!room || !room.isAi) return;
@@ -276,10 +255,6 @@ unoIo.on('connection', (socket) => {
         if (room.isAi) { checkAiTurn(roomCode); }
     });
 
-    socket.on('chatMessage', (data) => {
-        unoIo.to(data.roomCode).emit('chatMessage', data);
-    });
-
     function handleRoundWin(roomCode, winnerId) {
         const room = rooms[roomCode];
         let pointsWon = 0;
@@ -291,18 +266,18 @@ unoIo.on('connection', (socket) => {
         });
 
         room.scores[winnerId] = (room.scores[winnerId] || 0) + pointsWon;
-        unoIo.to(roomCode).emit('roundOver', { winnerId, pointsWon });
+        io.to(roomCode).emit('roundOver', { winnerId, pointsWon });
 
         if (room.scores[winnerId] >= 100) {
-            // إرسال معرف مدير الغرفة لمعرفة من يحق له إعادة اللعب
-            unoIo.to(roomCode).emit('gameOver', { winnerId, hostId: room.players[0] });
+            io.to(roomCode).emit('gameOver', { winnerId });
+            delete rooms[roomCode];
         } else {
-            setTimeout(() => startNewRound(roomCode), 3000);
+            setTimeout(() => startNewRound(roomCode), 10000);
         }
     }
 
     socket.on('disconnect', () => {
-        console.log(`مستخدم انقطع عن أونو: ${socket.id}`);
+        console.log(`مستخدم انقطع: ${socket.id}`);
     });
 });
 
