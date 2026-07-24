@@ -289,7 +289,7 @@ io.on('connection', (socket) => {
             io.to(roomCode).emit('gameOver', { winnerId });
             // لا نحذف الغرفة تماماً لكي يسمح النظام بإعادة اللعب عند الضغط على زر Rematch
         } else {
-            setTimeout(() => startNewRound(roomCode), 10000);
+            setTimeout(() => startNewRound(roomCode), 3000);
         }
     }
 
