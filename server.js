@@ -32,24 +32,27 @@ function generateRoomCode() {
 io.on('connection', (socket) => {
     console.log(`مستخدم متصل: ${socket.id}`);
 
-    // إنشاء غرفة أونلاين
+    // إنشاء غرفة أونلاين مع دعم سقف النقاط المختار
     socket.on('createRoom', (data) => {
         const playerName = (data && data.playerName) ? data.playerName : 'لاعب';
+        const targetScore = (data && data.targetScore) ? parseInt(data.targetScore) : 100;
         const roomCode = generateRoomCode();
+        
         rooms[roomCode] = {
             code: roomCode, players: [socket.id], playerNames: { [socket.id]: playerName },
             hands: { [socket.id]: [] }, scores: { [socket.id]: 0 },
-            deck: [], topCard: null, turnIndex: 0, isAi: false
+            deck: [], topCard: null, turnIndex: 0, isAi: false, targetScore: targetScore
         };
         socket.join(roomCode);
         socket.emit('roomCreated', roomCode);
         io.to(roomCode).emit('lobbyUpdated', { players: [{ id: socket.id, name: playerName }], hostId: socket.id });
     });
 
-    // 🤖 إنشاء غرفة اللعب ضد الكمبيوتر (تدعم من 2 لـ 4 لاعبين)
+    // 🤖 إنشاء غرفة اللعب ضد الكمبيوتر مع سقف النقاط
     socket.on('createAIRoom', (data) => {
         const playerName = (data && data.playerName) ? data.playerName : 'لاعب';
         const totalPlayers = (data && data.totalPlayers) ? parseInt(data.totalPlayers) : 2;
+        const targetScore = (data && data.targetScore) ? parseInt(data.targetScore) : 100;
         const roomCode = generateRoomCode();
         
         const players = [socket.id];
@@ -68,7 +71,7 @@ io.on('connection', (socket) => {
         rooms[roomCode] = {
             code: roomCode, players: players, playerNames: playerNames,
             hands: hands, scores: scores, deck: [], topCard: null,
-            turnIndex: 0, isAi: true, isAiProcessing: false
+            turnIndex: 0, isAi: true, isAiProcessing: false, targetScore: targetScore
         };
 
         socket.join(roomCode);
@@ -103,6 +106,19 @@ io.on('connection', (socket) => {
         }
     });
 
+    // 🌟 معالجة طلب إعادة اللعب (تصفير النقاط وبدء جولة جديدة)
+    socket.on('requestRematch', ({ roomCode }) => {
+        const room = rooms[roomCode];
+        if (!room) return;
+
+        // تصفير النقاط لجميع اللاعبين
+        room.players.forEach(playerId => {
+            room.scores[playerId] = 0;
+        });
+
+        startNewRound(roomCode);
+    });
+
     function startNewRound(roomCode) {
         const room = rooms[roomCode];
         if (!room) return;
@@ -125,7 +141,6 @@ io.on('connection', (socket) => {
         if (!room) return;
 
         room.players.forEach(playerId => {
-            // 🚀 الإصلاح الجذري: منع السيرفر من معالجة بيانات للروبوتات
             if (playerId.startsWith('AI_BOT')) return; 
 
             const myIndex = room.players.indexOf(playerId);
@@ -156,12 +171,12 @@ io.on('connection', (socket) => {
                 isMyTurn: room.players[room.turnIndex] === playerId,
                 myScore: room.scores[playerId] || 0,
                 myName: room.playerNames[playerId] || 'أنا',
-                currentTurnId: room.players[room.turnIndex]
+                currentTurnId: room.players[room.turnIndex],
+                targetScore: room.targetScore || 100 // 🌟 إرسال سقف النقاط للعميل
             });
         });
     }
 
-    // 🤖 دالة الذكاء الاصطناعي مع منع التداخل
     function checkAiTurn(roomCode) {
         const room = rooms[roomCode];
         if (!room || !room.isAi) return;
@@ -268,9 +283,11 @@ io.on('connection', (socket) => {
         room.scores[winnerId] = (room.scores[winnerId] || 0) + pointsWon;
         io.to(roomCode).emit('roundOver', { winnerId, pointsWon });
 
-        if (room.scores[winnerId] >= 100) {
+        // 🌟 الاعتماد على سقف النقاط المختار بدلاً من الرقم الثابت 100
+        const target = room.targetScore || 100;
+        if (room.scores[winnerId] >= target) {
             io.to(roomCode).emit('gameOver', { winnerId });
-            delete rooms[roomCode];
+            // لا نحذف الغرفة تماماً لكي يسمح النظام بإعادة اللعب عند الضغط على زر Rematch
         } else {
             setTimeout(() => startNewRound(roomCode), 10000);
         }
